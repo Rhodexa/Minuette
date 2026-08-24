@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minuette Configuration</title>
+    <style>
+        *, *::after, *::before {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --clr-bg: #142228;
+            --clr-banner: linear-gradient(#0000, #1e443abc);
+            --clr-banner-border: #1e443a;
+            --clr-banner-warning: linear-gradient(to left, #e9981660 60%, #0000 120%);
+            --clr-banner-warning-border: #e99816;
+            --clr-alarm-card: #2a4956;
+            --clr-accent: rgb(0, 171, 128);
+            --clr-danger: #ff8a75;
+            --clr-danger-bg: #c0392b3d;
+            --clr-danger-border: #c0392b80;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+
+        body {
+            background: var(--clr-bg) linear-gradient(#162629, #1d1f42);
+            /* Set background-attachment to fixed so it covers the whole page even if you scroll */
+            background-attachment: fixed;
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            margin: 0;
+        }
+
+        .app {
+            padding: 10px;
+            padding-bottom: calc(4rem + 20px); /* clears the fixed navbar */
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin: 0 auto;
+            padding-top: 1.6rem;
+        }
+
+        .navbar {
+            height: 4rem;
+            width: 100%;
+            position: fixed;
+            bottom: 0;
+        }
+
+        .status-banner {
+            width: 100%;
+            padding: 6px 8px;
+            border-radius: 8px;
+            background: var(--clr-banner);
+            border: 0px solid var(--clr-banner-border);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .status-banner.out-of-sync {
+            background: var(--clr-banner-warning);
+            border-color: var(--clr-banner-warning-border);
+            border-width: 0px; /* left here as an idea... not used */
+            box-shadow: 0 12px 20px #0004;
+        }
+
+        /* Base layout only — the two looks below carry all the visual weight,
+           since this button should almost always read as "everything's fine". */
+        .sync-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        /* In-sync (the ~90% case): quiet, easy to ignore */
+        .status-banner:not(.out-of-sync) .sync-btn {
+            background: #ffffff10;
+            border: 0px solid #ffffff20;
+            font-weight: normal;
+            padding: 6px;
+        }
+
+        /* Out-of-sync: the one time it should actually grab attention */
+        .status-banner.out-of-sync .sync-btn {
+            background-color: #00ab80b0;
+            border: 1px solid rgb(0, 99, 74);
+            font-weight: bold;
+        }
+
+        .status-figure {
+            height: 64px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .status-figure img {
+            max-height: 100%;
+            max-width: 120px;
+            object-fit: contain;
+            transform: scale(1.5);
+            z-index: 10;
+        }
+
+        .status-banner:not(.out-of-sync) .status-figure .img-desync { display: none; }
+        .status-banner.out-of-sync .status-figure .img-ok { display: none; }
+
+        .alarm-list {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .alarm-card {
+            width: 100%;
+            padding: 12px 14px;
+            font-size: larger;
+            border-radius: 8px;
+            background: var(--clr-alarm-card);
+            border: 1px solid #0003;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .alarm-card.disabled {
+            opacity: 0.55;
+        }
+
+        .alarm-add-card {
+            background-color: #ffffff08;
+            border: 1px dashed #fff3;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        /* Tactile press feedback for anything tappable */
+        .btn,
+        .alarm-action-btn,
+        .alarm-add-card,
+        .day-pill,
+        .sync-btn,
+        .navbar-action,
+        .time-step {
+            transition: transform 0.12s ease, background-color 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
+        }
+
+        .btn:active,
+        .alarm-action-btn:active,
+        .alarm-add-card:active,
+        .day-pill:active,
+        .sync-btn:active,
+        .navbar-action:active {
+            transform: scale(0.94);
+        }
+
+        .time-step:active {
+            transform: scale(0.85);
+        }
+
+        @media (hover: hover) {
+            .btn:hover,
+            .alarm-add-card:hover,
+            .sync-btn:hover,
+            .navbar-action:hover {
+                filter: brightness(1.1);
+            }
+
+            .alarm-action-btn:hover {
+                opacity: 0.8;
+            }
+
+            .time-step:hover {
+                color: white;
+            }
+        }
+
+        .alarm-time {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .alarm-days {
+            font-size: 0.75rem;
+            color: #ffffffa8;
+        }
+
+        .alarm-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.9rem;
+        }
+
+        .alarm-action-btn {
+            color: #cfe8ff;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 4px 6px;
+            font-family: inherit;
+            font-size: inherit;
+            font-weight: bold;
+        }
+
+        .alarm-action-btn.delete {
+            color: var(--clr-danger);
+        }
+
+        .alarm-action-btn.confirming {
+            color: white;
+            background: var(--clr-danger-bg);
+            border: 1px solid var(--clr-danger-border);
+            border-radius: 6px;
+        }
+
+        /* ---- add/edit modal ---- */
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: #000c;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            z-index: 10;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal-card {
+            width: 100%;
+            max-width: 340px;
+            background: #1c333b;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .time-input-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+        }
+
+        .time-number {
+            padding: 8px;
+            font-size: clamp(1.5rem, 12vw, 2.5rem);
+            text-align: center;
+            border-radius: 8px;
+            border: 0px solid #ffffff2e;
+            background: #25465148;
+            color: white;
+            font-family: inherit;
+            /* hide the native spinner arrows so it reads as one 24h field, not two odometers */
+            appearance: textfield;
+            -moz-appearance: textfield;
+            width: 100%;
+        }
+
+        .time-number::-webkit-inner-spin-button,
+        .time-number::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .time-sep {
+            font-size: 1.6rem;
+            font-weight: 600;
+        }
+
+        .time-field {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            width: 80px;
+        }
+
+        .time-step {
+            background: none;
+            border: none;
+            color: #ffffffa0;
+            cursor: pointer;
+            width: 100%;
+            height: 3rem;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .time-step svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .time-step.down svg {
+            transform: rotate(180deg);
+        }
+
+        .day-pill-row {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+        }
+
+        .day-pill {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff14;
+            border: 0px solid #ffffff2e;
+            cursor: pointer;
+            user-select: none;
+            font-size: 0.85rem;
+            transition: transform 0.12s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+            font-weight: bold;
+        }
+
+        .day-pill.active {
+            background: var(--clr-accent);
+            border-color: var(--clr-accent);
+            color: #08201a;
+            font-weight: 700;
+        }
+
+        .switch-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            flex-shrink: 0;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .switch .slider {
+            position: absolute;
+            inset: 0;
+            background: #ffffff2e;
+            border-radius: 999px;
+            transition: 0.15s;
+            cursor: pointer;
+        }
+
+        .switch .slider::before {
+            content: "";
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            left: 3px;
+            top: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.15s;
+        }
+
+        .switch input:checked + .slider {
+            background: var(--clr-accent);
+        }
+
+        .switch input:checked + .slider::before {
+            transform: translateX(20px);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            font-size: 0.95rem;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: var(--clr-accent);
+            color: #08201a;
+            font-weight: 600;
+        }
+
+        .btn-secondary {
+            background: #ffffff14;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="status-banner" id="status-banner">
+            <div style="display: flex; justify-content: space-around; align-items: center; gap: 16px;">
+                <div class="status-figure">
+                    <img class="img-ok" src="minuta_ok.png" alt="">
+                    <img class="img-desync" src="minuta_desync.png" alt="">
+                </div>
+                <div>
+                    <h2 id="status-headline">--:--</h2>
+                    <h3 id="status-subtext">Comprobando...</h3>
+                </div>
+            </div>
+            <div class="sync-btn" onclick="syncTime()">
+                Sincronizar
+            </div>
+        </div>
+        <hr style="width: 80%; border: 1px solid #fff1;">
+        <div id="next-alarm-line" style="display: flex; justify-content: center; align-items: center; padding: 8px">
+            Cargando alarmas...
+        </div>
+
+        <div class="alarm-card alarm-add-card" onclick="openAlarmModal(null)">
+            +
+        </div>
+        <div class="alarm-list" id="alarm-list"></div>
+    </div>
+
+    <div class="navbar" style="display: flex; justify-content: space-around; align-items: center; max-width: 800px; margin: 0 auto;">
+        <div class="navbar-action" style="cursor: pointer;">&lt; Salir de Configuración</div>
+        <div class="navbar-action" style="cursor: pointer;">Guardar</div>
+    </div>
+
+    <div class="modal-overlay" id="alarm-modal">
+        <div class="modal-card">
+            <h3 id="modal-title">Nueva alarma</h3>
+
+            <div class="time-input-row">
+                <div class="time-field">
+                    <button type="button" class="time-step" onclick="stepTime('modal-hour', 1)" aria-label="Subir hora">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"></polyline></svg>
+                    </button>
+                    <input type="number" class="time-number" id="modal-hour" min="0" max="23" inputmode="numeric" value="08">
+                    <button type="button" class="time-step down" onclick="stepTime('modal-hour', -1)" aria-label="Bajar hora">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"></polyline></svg>
+                    </button>
+                </div>
+                <span class="time-sep">:</span>
+                <div class="time-field">
+                    <button type="button" class="time-step" onclick="stepTime('modal-minute', 1)" aria-label="Subir minuto">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"></polyline></svg>
+                    </button>
+                    <input type="number" class="time-number" id="modal-minute" min="0" max="59" inputmode="numeric" value="00">
+                    <button type="button" class="time-step down" onclick="stepTime('modal-minute', -1)" aria-label="Bajar minuto">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"></polyline></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="day-pill-row" id="modal-days"></div>
+
+            <div class="switch-row">
+                <span>Activa</span>
+                <label class="switch">
+                    <input type="checkbox" id="modal-enabled" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeAlarmModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveAlarmModal()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Days-of-week bitmask matches the firmware's DOW_* layout in alarm.h:
+        // bit0=Sun .. bit6=Sat.
+        const DOW = { SUN: 1, MON: 2, TUE: 4, WED: 8, THU: 16, FRI: 32, SAT: 64 };
+        const DOW_WEEKDAYS = DOW.MON | DOW.TUE | DOW.WED | DOW.THU | DOW.FRI;
+        const DOW_ALL = 127;
+        const DAY_PILLS = [
+            { bit: DOW.MON, label: 'Lu' },
+            { bit: DOW.TUE, label: 'Ma' },
+            { bit: DOW.WED, label: 'Mi' },
+            { bit: DOW.THU, label: 'Ju' },
+            { bit: DOW.FRI, label: 'Vi' },
+            { bit: DOW.SAT, label: 'Sa' },
+            { bit: DOW.SUN, label: 'Do' },
+        ];
+
+        // The device is the source of truth; this just mirrors the last
+        // fetch. Every mutation re-fetches /api/alarms rather than trying to
+        // keep a local copy in sync with what the EEPROM actually holds.
+        let alarms = [];
+
+        function pad2(n) {
+            return String(n).padStart(2, '0');
+        }
+
+        function describeDays(days) {
+            if (days === DOW_ALL) return 'Todos los días';
+            if (days === DOW_WEEKDAYS) return 'Entre semana';
+            if (days === (DOW.SAT | DOW.SUN)) return 'Fines de semana';
+            if (days === 0) return 'Nunca';
+            return DAY_PILLS.filter(d => days & d.bit).map(d => d.label).join(' ');
+        }
+
+        async function fetchAlarms() {
+            const res = await fetch('/api/alarms');
+            alarms = await res.json();
+            renderAlarms();
+        }
+
+        // How many minutes from now until this alarm's next occurrence,
+        // walking forward day by day (today first, skipping today if its
+        // time already passed) until a day its daysMask covers is found.
+        function minutesUntilNext(alarm, nowDay, nowMinutes) {
+            for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+                const day = (nowDay + dayOffset) % 7;
+                if (!(alarm.days & (1 << day))) continue;
+                const alarmMinutes = alarm.hour * 60 + alarm.minute;
+                if (dayOffset === 0 && alarmMinutes <= nowMinutes) continue;
+                return dayOffset * 1440 + alarmMinutes - nowMinutes;
+            }
+            return null; // daysMask is 0, or some other reason no day ever matches
+        }
+
+        function renderNextAlarmLine() {
+            const line = document.getElementById('next-alarm-line');
+            const active = alarms.filter(a => a.enabled && a.days !== 0);
+            if (active.length === 0) {
+                line.textContent = 'No hay alarmas activas';
+                return;
+            }
+
+            const now = estimatedDeviceNow();
+            const nowDay = now.getDay(); // 0=Sun..6=Sat, matches the DOW_* bit layout
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+            let best = null;
+            for (const a of active) {
+                const minutesUntil = minutesUntilNext(a, nowDay, nowMinutes);
+                if (minutesUntil !== null && (best === null || minutesUntil < best.minutesUntil)) {
+                    best = { alarm: a, minutesUntil };
+                }
+            }
+
+            line.textContent = best
+                ? `Siguiente a las: ${pad2(best.alarm.hour)}:${pad2(best.alarm.minute)}`
+                : 'No hay alarmas activas';
+        }
+
+        function renderAlarms() {
+            const list = document.getElementById('alarm-list');
+            list.innerHTML = '';
+
+            const sorted = [...alarms].sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute));
+
+            for (const alarm of sorted) {
+                const card = document.createElement('div');
+                card.className = 'alarm-card' + (alarm.enabled ? '' : ' disabled');
+
+                const info = document.createElement('div');
+                info.innerHTML = `
+                    <div class="alarm-time">${pad2(alarm.hour)}:${pad2(alarm.minute)}</div>
+                    <div class="alarm-days">${describeDays(alarm.days)}</div>
+                `;
+
+                const actions = document.createElement('div');
+                actions.className = 'alarm-actions';
+
+                const toggleLabel = document.createElement('label');
+                toggleLabel.className = 'switch';
+                toggleLabel.innerHTML = `
+                    <input type="checkbox" ${alarm.enabled ? 'checked' : ''}>
+                    <span class="slider"></span>
+                `;
+                toggleLabel.querySelector('input').addEventListener('change', async (e) => {
+                    await fetch(`/api/alarms/${alarm.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ hour: alarm.hour, minute: alarm.minute, days: alarm.days, enabled: e.target.checked }),
+                    });
+                    await fetchAlarms();
+                });
+
+                const editBtn = document.createElement('button');
+                editBtn.className = 'alarm-action-btn';
+                editBtn.textContent = 'Editar';
+                editBtn.onclick = () => openAlarmModal(alarm.id);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'alarm-action-btn delete';
+                deleteBtn.textContent = 'Eliminar';
+                let confirmTimeout = null;
+                deleteBtn.onclick = async () => {
+                    if (confirmTimeout) {
+                        clearTimeout(confirmTimeout);
+                        await fetch(`/api/alarms/${alarm.id}`, { method: 'DELETE' });
+                        await fetchAlarms();
+                        return;
+                    }
+                    deleteBtn.textContent = '¿Confirmar?';
+                    deleteBtn.classList.add('confirming');
+                    confirmTimeout = setTimeout(() => {
+                        deleteBtn.textContent = 'Eliminar';
+                        deleteBtn.classList.remove('confirming');
+                        confirmTimeout = null;
+                    }, 3000);
+                };
+
+                actions.appendChild(editBtn);
+                actions.appendChild(deleteBtn);
+                actions.appendChild(toggleLabel);
+
+                card.appendChild(info);
+                card.appendChild(actions);
+                list.appendChild(card);
+            }
+
+            renderNextAlarmLine();
+        }
+
+        let editingId = null;
+
+        function renderDayPills(activeDays) {
+            const row = document.getElementById('modal-days');
+            row.innerHTML = '';
+            for (const day of DAY_PILLS) {
+                const pill = document.createElement('div');
+                pill.className = 'day-pill' + (activeDays & day.bit ? ' active' : '');
+                pill.textContent = day.label;
+                pill.dataset.bit = day.bit;
+                pill.onclick = () => pill.classList.toggle('active');
+                row.appendChild(pill);
+            }
+        }
+
+        function clamp(value, min, max) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        const modalHourInput = document.getElementById('modal-hour');
+        const modalMinuteInput = document.getElementById('modal-minute');
+
+        // Clamp as the user types so the fields can never hold an invalid
+        // hour/minute, and re-pad to two digits once they're done editing.
+        modalHourInput.addEventListener('input', () => {
+            if (modalHourInput.value === '') return;
+            modalHourInput.value = clamp(parseInt(modalHourInput.value, 10) || 0, 0, 23);
+        });
+        modalMinuteInput.addEventListener('input', () => {
+            if (modalMinuteInput.value === '') return;
+            modalMinuteInput.value = clamp(parseInt(modalMinuteInput.value, 10) || 0, 0, 59);
+        });
+        modalHourInput.addEventListener('blur', () => {
+            modalHourInput.value = pad2(clamp(parseInt(modalHourInput.value, 10) || 0, 0, 23));
+        });
+        modalMinuteInput.addEventListener('blur', () => {
+            modalMinuteInput.value = pad2(clamp(parseInt(modalMinuteInput.value, 10) || 0, 0, 59));
+        });
+
+        // Tap the chevrons to nudge hour/minute by one, wrapping around
+        // (23 -> 0, 0 -> 23) like a real clock instead of getting stuck at the ends.
+        function stepTime(inputId, delta) {
+            const el = document.getElementById(inputId);
+            const max = inputId === 'modal-hour' ? 23 : 59;
+            const current = parseInt(el.value, 10) || 0;
+            const next = (current + delta + (max + 1)) % (max + 1);
+            el.value = pad2(next);
+        }
+
+        function openAlarmModal(id) {
+            editingId = id;
+            const modal = document.getElementById('alarm-modal');
+            const title = document.getElementById('modal-title');
+            const enabledInput = document.getElementById('modal-enabled');
+
+            if (id === null) {
+                title.textContent = 'Nueva alarma';
+                modalHourInput.value = '08';
+                modalMinuteInput.value = '00';
+                enabledInput.checked = true;
+                renderDayPills(DOW_WEEKDAYS);
+            } else {
+                const alarm = alarms.find(a => a.id === id);
+                title.textContent = 'Editar alarma';
+                modalHourInput.value = pad2(alarm.hour);
+                modalMinuteInput.value = pad2(alarm.minute);
+                enabledInput.checked = alarm.enabled;
+                renderDayPills(alarm.days);
+            }
+
+            modal.classList.add('open');
+        }
+
+        function closeAlarmModal() {
+            document.getElementById('alarm-modal').classList.remove('open');
+            editingId = null;
+        }
+
+        async function saveAlarmModal() {
+            const hour = clamp(parseInt(modalHourInput.value, 10) || 0, 0, 23);
+            const minute = clamp(parseInt(modalMinuteInput.value, 10) || 0, 0, 59);
+            const enabled = document.getElementById('modal-enabled').checked;
+            let days = 0;
+            document.querySelectorAll('#modal-days .day-pill').forEach(pill => {
+                if (pill.classList.contains('active')) {
+                    days |= Number(pill.dataset.bit);
+                }
+            });
+
+            const payload = { hour, minute, days, enabled };
+            const url = editingId === null ? '/api/alarms' : `/api/alarms/${editingId}`;
+            const method = editingId === null ? 'POST' : 'PUT';
+            await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            closeAlarmModal();
+            await fetchAlarms();
+        }
+
+        // ---- sync banner ----
+
+        // Offset between the device's clock and this phone's clock, so
+        // "what time does the device think it is right now" can be estimated
+        // between /api/time polls without re-fetching every second. Used by
+        // renderNextAlarmLine() so "next alarm" reflects the device's own
+        // notion of time (the one that actually decides when the bell
+        // rings), not the phone's — those two are exactly what this banner
+        // exists to compare, so they can legitimately disagree.
+        let deviceTimeOffsetMs = null;
+
+        function estimatedDeviceNow() {
+            return new Date(Date.now() + (deviceTimeOffsetMs || 0));
+        }
+
+        function updateSyncBanner(deviceUnixTime) {
+            const phoneUnixTime = Math.floor(Date.now() / 1000);
+            const outOfSync = Math.abs(phoneUnixTime - deviceUnixTime) > 60; // seconds don't matter, minutes do
+            deviceTimeOffsetMs = deviceUnixTime * 1000 - Date.now();
+
+            document.getElementById('status-banner').classList.toggle('out-of-sync', outOfSync);
+            document.getElementById('status-subtext').textContent = outOfSync ? '¿Está mal mi reloj?' : 'Sincronizado';
+
+            const d = new Date(deviceUnixTime * 1000);
+            document.getElementById('status-headline').textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+
+            renderNextAlarmLine(); // depends on estimatedDeviceNow(), recompute now that it moved
+        }
+
+        async function fetchTime() {
+            const res = await fetch('/api/time');
+            const data = await res.json();
+            updateSyncBanner(data.unixTime);
+        }
+
+        async function syncTime() {
+            const res = await fetch('/api/time', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ unixTime: Math.floor(Date.now() / 1000) }),
+            });
+            const data = await res.json();
+            updateSyncBanner(data.unixTime);
+        }
+
+        fetchAlarms();
+        fetchTime();
+        setInterval(fetchTime, 30000); // keeps the sync banner honest while the page stays open
+    </script>
+</body>
+</html>
