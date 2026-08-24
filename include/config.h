@@ -15,7 +15,7 @@
 
 // ---- Relay / bell ----
 #define RELAY_ACTIVE_HIGH   true     // flip to false if the relay module is active-low
-#define BELL_RING_MS        3000     // default pulse length for a bell "ring" event
+#define BELL_RING_MS        4000     // default pulse length for a bell "ring" event
 
 // ---- Button / config mode ----
 #define BUTTON_ACTIVE_LOW      true
@@ -30,4 +30,4 @@
 // the same time as each other unless someone's actively pressing buttons
 // on two of them within earshot.
 #define CONFIG_AP_SSID          "Minuette"
-#define CONFIG_AP_PASSWORD     "campana1234" // WPA2 needs >= 8 chars
+#define CONFIG_AP_PASSWORD     "minuta12345" // WPA2 needs >= 8 chars

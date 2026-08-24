@@ -234,6 +234,34 @@
             border-radius: 6px;
         }
 
+        /* Hourglass badge marking whichever card is next in the queue */
+        .next-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 15px;
+            height: 15px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .next-badge svg {
+            width: 100%;
+            height: 100%;
+            transform-origin: center;
+            animation: hourglass-flip 12s ease-in-out infinite;
+        }
+
+        @keyframes hourglass-flip {
+            0%   { transform: rotate(0deg)  scale(1.4); }
+
+            10%  { transform: rotate(180deg) scale(1.4); }
+            50%  { transform: rotate(180deg) scale(1.4); }
+
+            60%  { transform: rotate(360deg) scale(1.4); }
+            100% { transform: rotate(360deg) scale(1.4); }
+        }
+
         /* ---- add/edit modal ---- */
 
         .modal-overlay {
@@ -456,16 +484,28 @@
         <div class="alarm-card alarm-add-card" onclick="openAlarmModal(null)">
             +
         </div>
+
         <div class="alarm-list" id="alarm-list"></div>
+
+        <div class="alarm-list" style="opacity: 0.3; text-align: center; padding-top: 5rem;">
+            <p>Designed by <b>Rhodune! Lab</b> with Love ❤️</p>
+            <a href="https://github.com/Rhodexa/Minuette" style="color: white;">https://github.com/Rhodexa/Minuette</a>
+            <p>🇦🇷</p>
+        </div>
     </div>
 
-    <div class="navbar" style="display: flex; justify-content: space-around; align-items: center; max-width: 800px; margin: 0 auto;">
-        <div class="navbar-action" style="cursor: pointer;">&lt; Salir de Configuración</div>
-        <div class="navbar-action" style="cursor: pointer;">Guardar</div>
+
+
+    <div style="position: fixed; bottom: 0.5rem; left: 0.5rem; right: 0.5rem; display: flex; justify-content: center; align-items: center; ">
+        <div style="padding: 0.5rem; width: 100%; display: flex; justify-content: space-between; align-items: center; max-width: 800px; background-color: #fff2; border-radius: 8px;">
+            <div class="navbar-action" style="cursor: pointer; background-color: #00000043; padding: 1rem 2rem; border-radius: 8px; font-weight: bold;">Cancelar</div>
+            <div class="navbar-action" style="cursor: pointer; background-color: #008663; padding: 1rem 2rem; border-radius: 8px; font-weight: bold;">Guardar y Salir</div>
+        </div>
     </div>
 
     <div class="modal-overlay" id="alarm-modal">
-        <div class="modal-card">
+        <div class="modal-card" style="position: relative;">
+            <img src="minuta_set.png" style="position: absolute; transform: scale(0.5); top: -60%">
             <h3 id="modal-title">Nueva alarma</h3>
 
             <div class="time-input-row">
@@ -540,6 +580,20 @@
             { id: 3, hour: 13, minute: 0, days: DOW_WEEKDAYS, enabled: true },
         ];
 
+        const NEXT_ALARM_ICON_SVG = `
+            <svg viewBox="0 0 33.182 33.182" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M25.591,4.091c0-3.02-4.85-4.091-9-4.091c-4.151,0-9,1.071-9,4.091c0,3.467,4.048,9.963,6.531,12.5
+                    c-2.483,2.537-6.531,9.033-6.531,12.5c0,3.021,4.849,4.091,9,4.091c4.15,0,9-1.072,9-4.091c0-3.467-4.048-9.963-6.531-12.5
+                    C21.543,14.054,25.591,7.558,25.591,4.091z M24.591,29.091c0,2.062-4,3.091-8,3.091s-8-1.031-8-3.091
+                    c0-3.647,5.144-11.278,7.05-12.5c-1.906-1.221-7.05-8.852-7.05-12.5c0-2.061,4-3.091,8-3.091s8,1.031,8,3.091
+                    c0,3.648-5.145,11.279-7.05,12.5C19.446,17.812,24.591,25.443,24.591,29.091z"/>
+                <path d="M10.527,29.957c0,0.186,2.085,0.725,6.064,0.725c3.979,0,6.064-0.539,6.064-0.725c0-2.752-6.064-4.647-6.064-9.575
+                    C16.591,25.31,10.527,27.102,10.527,29.957z"/>
+                <path d="M16.474,15.352l0.117,1.066l0.117-1.066c1.188-0.67,5.275-5.955,5.275-8.221c0-0.299-1.854-1.165-5.394-1.165
+                    s-5.394,0.865-5.394,1.165C11.197,9.397,15.286,14.682,16.474,15.352z"/>
+            </svg>
+        `;
+
         function pad2(n) {
             return String(n).padStart(2, '0');
         }
@@ -552,17 +606,24 @@
             return DAY_PILLS.filter(d => days & d.bit).map(d => d.label).join(' ');
         }
 
-        function renderNextAlarmLine() {
-            const line = document.getElementById('next-alarm-line');
+        // Shared by the "Siguiente a las" line and the hourglass badge, so
+        // both always agree on which alarm is actually next.
+        function findNextAlarm() {
             const active = alarms.filter(a => a.enabled);
             if (active.length === 0) {
-                line.textContent = 'No hay alarmas activas';
-                return;
+                return null;
             }
-            const next = active.reduce((soonest, a) =>
+            return active.reduce((soonest, a) =>
                 (a.hour * 60 + a.minute) < (soonest.hour * 60 + soonest.minute) ? a : soonest
             );
-            line.textContent = `Siguiente a las: ${pad2(next.hour)}:${pad2(next.minute)}`;
+        }
+
+        function renderNextAlarmLine() {
+            const line = document.getElementById('next-alarm-line');
+            const next = findNextAlarm();
+            line.textContent = next
+                ? `Siguiente a las: ${pad2(next.hour)}:${pad2(next.minute)}`
+                : 'No hay alarmas activas';
         }
 
         function renderAlarms() {
@@ -570,6 +631,7 @@
             list.innerHTML = '';
 
             const sorted = [...alarms].sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute));
+            const next = findNextAlarm();
 
             for (const alarm of sorted) {
                 const card = document.createElement('div');
@@ -599,6 +661,14 @@
                 editBtn.className = 'alarm-action-btn';
                 editBtn.textContent = 'Editar';
                 editBtn.onclick = () => openAlarmModal(alarm.id);
+
+                if (next && next.id === alarm.id) {
+                    const badge = document.createElement('span');
+                    badge.className = 'next-badge';
+                    badge.title = 'Siguiente alarma';
+                    badge.innerHTML = NEXT_ALARM_ICON_SVG;
+                    actions.appendChild(badge);
+                }
 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'alarm-action-btn delete';

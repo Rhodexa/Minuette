@@ -15,6 +15,11 @@
 // timer, not just the button press that started it.
 extern void configModeTouch();
 
+// Also defined in main.cpp — flags loop() to exit config mode once it's
+// safe to do so (i.e. after this request has finished and we're no longer
+// inside the server's own call stack).
+extern void requestConfigModeExit();
+
 static WebServer server(80);
 static DNSServer dnsServer;
 static const byte DNS_PORT = 53;
@@ -58,7 +63,11 @@ static void sendError(int status, const char *message) {
 }
 
 static void handleGetTime() {
-  configModeTouch();
+  // No configModeTouch() here on purpose — the page polls this every 30s
+  // for as long as the tab is open, whether or not anyone's actually there.
+  // Counting that as "activity" meant the inactivity timeout could never
+  // actually fire while a tab sat open and forgotten. Only state-changing
+  // requests (below) count as real activity.
   JsonDocument doc;
   doc["unixTime"] = rtcToUnixTime(rtcNow());
   sendJson(200, doc);
@@ -79,7 +88,10 @@ static void handlePostTime() {
 }
 
 static void handleGetAlarms() {
-  configModeTouch();
+  // No configModeTouch() here either — same reasoning as handleGetTime().
+  // Every write (add/edit/delete/toggle) already touches the timer on its
+  // own, and this GET is only ever called right after one of those or on
+  // initial page load, never on its own recurring timer.
   JsonDocument doc;
   JsonArray arr = doc.to<JsonArray>();
   for (uint8_t slot = 0; slot < MAX_ALARMS; slot++) {
@@ -158,6 +170,14 @@ static void handleDeleteAlarm() {
   server.send(204, "application/json", "");
 }
 
+static void handleExitConfig() {
+  // Deliberately no configModeTouch() here — we're exiting on purpose,
+  // extending the timeout right as the device is about to shut it off
+  // would be pointless.
+  server.send(200, "application/json", "{}");
+  requestConfigModeExit();
+}
+
 static void registerRoutes() {
   if (routesRegistered) {
     return;
@@ -183,6 +203,7 @@ static void registerRoutes() {
   server.on("/api/alarms", HTTP_POST, handlePostAlarm);
   server.on(UriBraces("/api/alarms/{}"), HTTP_PUT, handlePutAlarm);
   server.on(UriBraces("/api/alarms/{}"), HTTP_DELETE, handleDeleteAlarm);
+  server.on("/api/exit-config", HTTP_POST, handleExitConfig);
 }
 
 void webServerStart() {

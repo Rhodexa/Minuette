@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python3 -c ' *)",
-      "Bash(node --check extracted.js)"
+      "Bash(node --check extracted.js)",
+      "Bash(node -e ' *)"
     ]
   }
 }

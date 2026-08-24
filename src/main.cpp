@@ -14,11 +14,22 @@
 
 static bool configModeActive = false;
 static unsigned long configModeDeadlineMs = 0;
+static bool configModeExitRequested = false;
 
 // Any real activity in config mode (a web request, not just the button)
 // pushes the inactivity shutoff back out. Called from web_server.cpp too.
 void configModeTouch() {
   configModeDeadlineMs = millis() + CONFIG_MODE_TIMEOUT_MS;
+}
+
+// Called from web_server.cpp when the page's "Salir"/"Guardar" buttons are
+// tapped. Just sets a flag rather than tearing the server down directly —
+// this runs from inside a request handler, itself called from
+// webServerUpdate(), so stopping the server mid-callback would mean pulling
+// the rug out from under its own call stack. loop() picks this up once
+// webServerUpdate() has returned and it's safe to shut down.
+void requestConfigModeExit() {
+  configModeExitRequested = true;
 }
 
 static void enterConfigMode() {
@@ -65,6 +76,7 @@ void setup() {
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
 
   ledInit();
+  ledBootDance();
   relayInit();
   buttonInit();
 
@@ -89,6 +101,7 @@ void loop() {
   buttonUpdate();
   ledUpdate();
   relayUpdate();
+  ledSetRinging(relayIsOn());
 
   if (buttonWasPressed()) {
     if (configModeActive) {
@@ -104,6 +117,13 @@ void loop() {
 
   if (configModeActive) {
     webServerUpdate();
+  }
+
+  if (configModeExitRequested) {
+    configModeExitRequested = false;
+    if (configModeActive) {
+      exitConfigMode();
+    }
   }
 
   static unsigned long lastRtcPollMs = 0;

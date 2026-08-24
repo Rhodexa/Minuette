@@ -234,6 +234,34 @@
             border-radius: 6px;
         }
 
+        /* Hourglass badge marking whichever card is next in the queue */
+        .next-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 15px;
+            height: 15px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .next-badge svg {
+            width: 100%;
+            height: 100%;
+            transform-origin: center;
+            animation: hourglass-flip 12s ease-in-out infinite;
+        }
+
+        @keyframes hourglass-flip {
+            0%   { transform: rotate(0deg)  scale(1.4); }
+
+            10%  { transform: rotate(180deg) scale(1.4); }
+            50%  { transform: rotate(180deg) scale(1.4); }
+
+            60%  { transform: rotate(360deg) scale(1.4); }
+            100% { transform: rotate(360deg) scale(1.4); }
+        }
+
         /* ---- add/edit modal ---- */
 
         .modal-overlay {
@@ -458,8 +486,8 @@
     </div>
 
     <div class="navbar" style="display: flex; justify-content: space-around; align-items: center; max-width: 800px; margin: 0 auto;">
-        <div class="navbar-action" style="cursor: pointer;">&lt; Salir de Configuración</div>
-        <div class="navbar-action" style="cursor: pointer;">Guardar</div>
+        <div class="navbar-action" style="cursor: pointer;" onclick="exitConfigMode()">&lt; Salir de Configuración</div>
+        <div class="navbar-action" style="cursor: pointer;" onclick="exitConfigMode()">Guardar</div>
     </div>
 
     <div class="modal-overlay" id="alarm-modal">
@@ -526,6 +554,20 @@
         // keep a local copy in sync with what the EEPROM actually holds.
         let alarms = [];
 
+        const NEXT_ALARM_ICON_SVG = `
+            <svg viewBox="0 0 33.182 33.182" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M25.591,4.091c0-3.02-4.85-4.091-9-4.091c-4.151,0-9,1.071-9,4.091c0,3.467,4.048,9.963,6.531,12.5
+                    c-2.483,2.537-6.531,9.033-6.531,12.5c0,3.021,4.849,4.091,9,4.091c4.15,0,9-1.072,9-4.091c0-3.467-4.048-9.963-6.531-12.5
+                    C21.543,14.054,25.591,7.558,25.591,4.091z M24.591,29.091c0,2.062-4,3.091-8,3.091s-8-1.031-8-3.091
+                    c0-3.647,5.144-11.278,7.05-12.5c-1.906-1.221-7.05-8.852-7.05-12.5c0-2.061,4-3.091,8-3.091s8,1.031,8,3.091
+                    c0,3.648-5.145,11.279-7.05,12.5C19.446,17.812,24.591,25.443,24.591,29.091z"/>
+                <path d="M10.527,29.957c0,0.186,2.085,0.725,6.064,0.725c3.979,0,6.064-0.539,6.064-0.725c0-2.752-6.064-4.647-6.064-9.575
+                    C16.591,25.31,10.527,27.102,10.527,29.957z"/>
+                <path d="M16.474,15.352l0.117,1.066l0.117-1.066c1.188-0.67,5.275-5.955,5.275-8.221c0-0.299-1.854-1.165-5.394-1.165
+                    s-5.394,0.865-5.394,1.165C11.197,9.397,15.286,14.682,16.474,15.352z"/>
+            </svg>
+        `;
+
         function pad2(n) {
             return String(n).padStart(2, '0');
         }
@@ -565,17 +607,19 @@
             return null; // daysMask is 0, or some other reason no day ever matches
         }
 
-        function renderNextAlarmLine() {
-            const line = document.getElementById('next-alarm-line');
+        // Shared by the "Siguiente a las" line and the hourglass badge, so
+        // both always agree on which alarm is actually next.
+        function findNextAlarm() {
             const active = alarms.filter(a => a.enabled && a.days !== 0);
             if (active.length === 0) {
-                line.textContent = 'No hay alarmas activas';
-                return;
+                return null;
             }
 
+            // getUTC*() here, not getDay()/getHours()/getMinutes() — estimatedDeviceNow()
+            // is built the disguised-local way, see phoneWallClockUnixTime()'s comment.
             const now = estimatedDeviceNow();
-            const nowDay = now.getDay(); // 0=Sun..6=Sat, matches the DOW_* bit layout
-            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+            const nowDay = now.getUTCDay(); // 0=Sun..6=Sat, matches the DOW_* bit layout
+            const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
 
             let best = null;
             for (const a of active) {
@@ -584,10 +628,32 @@
                     best = { alarm: a, minutesUntil };
                 }
             }
+            return best ? best.alarm : null;
+        }
 
-            line.textContent = best
-                ? `Siguiente a las: ${pad2(best.alarm.hour)}:${pad2(best.alarm.minute)}`
+        // Moves the hourglass badge without rebuilding the whole card list —
+        // this runs every 30s from the time poll too, not just on data
+        // changes, since "next" can shift purely from time passing.
+        function updateNextAlarmBadge(next) {
+            document.querySelectorAll('.alarm-card .next-badge').forEach(el => el.remove());
+            if (!next) return;
+            const card = document.querySelector(`.alarm-card[data-id="${next.id}"]`);
+            const editBtn = card && card.querySelector('.alarm-action-btn:not(.delete)');
+            if (!editBtn) return;
+            const badge = document.createElement('span');
+            badge.className = 'next-badge';
+            badge.title = 'Siguiente alarma';
+            badge.innerHTML = NEXT_ALARM_ICON_SVG;
+            editBtn.insertAdjacentElement('beforebegin', badge);
+        }
+
+        function renderNextAlarmLine() {
+            const line = document.getElementById('next-alarm-line');
+            const next = findNextAlarm();
+            line.textContent = next
+                ? `Siguiente a las: ${pad2(next.hour)}:${pad2(next.minute)}`
                 : 'No hay alarmas activas';
+            updateNextAlarmBadge(next);
         }
 
         function renderAlarms() {
@@ -599,6 +665,7 @@
             for (const alarm of sorted) {
                 const card = document.createElement('div');
                 card.className = 'alarm-card' + (alarm.enabled ? '' : ' disabled');
+                card.dataset.id = alarm.id; // lets updateNextAlarmBadge() find this card later
 
                 const info = document.createElement('div');
                 info.innerHTML = `
@@ -765,9 +832,30 @@
 
         // ---- sync banner ----
 
-        // Offset between the device's clock and this phone's clock, so
-        // "what time does the device think it is right now" can be estimated
-        // between /api/time polls without re-fetching every second. Used by
+        // The device has no timezone/DST database — RTClib just decomposes
+        // whatever unix timestamp it's given into calendar fields with no
+        // offset applied, so whatever we send it becomes the RTC's literal
+        // wall-clock hour/minute. Alarms are entered as plain local
+        // hour/minute too (nothing converts them). So the "unixTime" this
+        // page exchanges with the device is never actually UTC — it's the
+        // phone's local wall-clock fields, encoded via Date.UTC()/decoded
+        // via getUTC*() purely as a transport trick, so the browser's own
+        // timezone conversion never gets a chance to shift it. Using real
+        // UTC (Date.now()/getHours()) here was the bug that had the RTC
+        // storing UTC while alarms compare against local — same clock,
+        // same alarm, systematically off by the local UTC offset.
+        function phoneWallClockUnixTime() {
+            const d = new Date();
+            return Math.floor(Date.UTC(
+                d.getFullYear(), d.getMonth(), d.getDate(),
+                d.getHours(), d.getMinutes(), d.getSeconds()
+            ) / 1000);
+        }
+
+        // Offset between the device's wall clock and the phone's wall clock
+        // (both expressed the disguised way above), so "what time does the
+        // device think it is right now" can be estimated between /api/time
+        // polls without re-fetching every second. Used by
         // renderNextAlarmLine() so "next alarm" reflects the device's own
         // notion of time (the one that actually decides when the bell
         // rings), not the phone's — those two are exactly what this banner
@@ -775,19 +863,21 @@
         let deviceTimeOffsetMs = null;
 
         function estimatedDeviceNow() {
-            return new Date(Date.now() + (deviceTimeOffsetMs || 0));
+            return new Date(phoneWallClockUnixTime() * 1000 + (deviceTimeOffsetMs || 0));
         }
 
         function updateSyncBanner(deviceUnixTime) {
-            const phoneUnixTime = Math.floor(Date.now() / 1000);
+            const phoneUnixTime = phoneWallClockUnixTime();
             const outOfSync = Math.abs(phoneUnixTime - deviceUnixTime) > 60; // seconds don't matter, minutes do
-            deviceTimeOffsetMs = deviceUnixTime * 1000 - Date.now();
+            deviceTimeOffsetMs = deviceUnixTime * 1000 - phoneUnixTime * 1000;
 
             document.getElementById('status-banner').classList.toggle('out-of-sync', outOfSync);
             document.getElementById('status-subtext').textContent = outOfSync ? '¿Está mal mi reloj?' : 'Sincronizado';
 
+            // getUTC*() here, not getHours()/getMinutes() — see the comment
+            // on phoneWallClockUnixTime() above for why.
             const d = new Date(deviceUnixTime * 1000);
-            document.getElementById('status-headline').textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+            document.getElementById('status-headline').textContent = `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 
             renderNextAlarmLine(); // depends on estimatedDeviceNow(), recompute now that it moved
         }
@@ -820,7 +910,7 @@
                 const res = await fetch('/api/time', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ unixTime: Math.floor(Date.now() / 1000) }),
+                    body: JSON.stringify({ unixTime: phoneWallClockUnixTime() }),
                 });
                 if (!res.ok) throw new Error('bad response');
                 const data = await res.json();
@@ -828,6 +918,26 @@
             } catch (err) {
                 showConnectionLost();
             }
+        }
+
+        // Both navbar buttons do the same thing: everything already saves
+        // itself as it's edited (no separate "unsaved changes" to flush),
+        // so "Guardar" and "Salir de Configuración" both just tell the
+        // device to close config mode.
+        async function exitConfigMode() {
+            try {
+                await fetch('/api/exit-config', { method: 'POST' });
+            } catch (err) {
+                // ignore — the AP dropping out from under us is the expected outcome
+            }
+            document.body.insertAdjacentHTML('beforeend', `
+                <div class="modal-overlay open">
+                    <div class="modal-card" style="text-align: center;">
+                        <h3>Saliendo de configuración</h3>
+                        <p style="margin: 0; color: #ffffffc0;">Ya puedes cerrar esta página. La red Wi-Fi del dispositivo se desconectará en breve.</p>
+                    </div>
+                </div>
+            `);
         }
 
         fetchAlarms();
