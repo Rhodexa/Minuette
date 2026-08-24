@@ -1,1 +1,1 @@
-![screenshot](minuta_ok.png)
+![screenshot](minuta_presents.png)
