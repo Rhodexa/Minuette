@@ -1,7 +1,7 @@
 ![screenshot](minuta_presents.png)
 ---
 # Minuta / Minuette
-SSID: Minuette
+SSID: Minuette \
 Password: minuta1234
 ---
 A simple app to drive school bells!
