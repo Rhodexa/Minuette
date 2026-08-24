@@ -1,0 +1,1 @@
+![screenshot](minuta_ok.png)
