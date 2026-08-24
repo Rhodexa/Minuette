@@ -46,20 +46,13 @@ static void checkAlarms(const DateTimeFields &now) {
   }
   lastCheckedMinute = now.minute;
 
-  // TEMPORARY diagnostic logging while tracking down why an alarm didn't
-  // fire — remove once confirmed working. Prints what the RTC reports and
-  // what every stored alarm looks like, once per real minute change.
-  Serial.printf("[alarm] checking %02u:%02u (dow=%u)\n", now.hour, now.minute, now.dayOfWeek);
-
   for (uint8_t slot = 0; slot < MAX_ALARMS; slot++) {
     Alarm a;
     if (!alarmGet(slot, &a)) {
       continue;
     }
-    Serial.printf("[alarm]   slot %u: %02u:%02u days=0x%02X enabled=%u match=%u\n",
-                  slot, a.hour, a.minute, a.daysMask, a.enabled, alarmMatches(a, now));
     if (alarmMatches(a, now)) {
-      Serial.printf("[alarm] fired at %02u:%02u\n", now.hour, now.minute);
+      Serial.printf("[alarm] slot %u fired at %02u:%02u\n", slot, now.hour, now.minute);
       relayPulse();
     }
   }

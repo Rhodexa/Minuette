@@ -539,9 +539,16 @@
         }
 
         async function fetchAlarms() {
-            const res = await fetch('/api/alarms');
-            alarms = await res.json();
-            renderAlarms();
+            try {
+                const res = await fetch('/api/alarms');
+                if (!res.ok) throw new Error('bad response');
+                alarms = await res.json();
+                renderAlarms();
+            } catch (err) {
+                // Don't leave a stale list on screen looking current — e.g. after
+                // the device reboots and this tab's connection drops silently.
+                document.getElementById('next-alarm-line').textContent = 'Sin conexión con el dispositivo';
+            }
         }
 
         // How many minutes from now until this alarm's next occurrence,
@@ -785,20 +792,42 @@
             renderNextAlarmLine(); // depends on estimatedDeviceNow(), recompute now that it moved
         }
 
+        // Shown instead of the sync banner's normal states whenever a request
+        // to the device fails — e.g. it rebooted and this tab's connection
+        // dropped silently. Without this, a lost connection just freezes the
+        // last-known values on screen looking exactly as current as ever,
+        // which is actively misleading rather than merely stale.
+        function showConnectionLost() {
+            const banner = document.getElementById('status-banner');
+            banner.classList.add('out-of-sync');
+            document.getElementById('status-headline').textContent = '--:--';
+            document.getElementById('status-subtext').textContent = 'Sin conexión con el dispositivo';
+        }
+
         async function fetchTime() {
-            const res = await fetch('/api/time');
-            const data = await res.json();
-            updateSyncBanner(data.unixTime);
+            try {
+                const res = await fetch('/api/time');
+                if (!res.ok) throw new Error('bad response');
+                const data = await res.json();
+                updateSyncBanner(data.unixTime);
+            } catch (err) {
+                showConnectionLost();
+            }
         }
 
         async function syncTime() {
-            const res = await fetch('/api/time', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ unixTime: Math.floor(Date.now() / 1000) }),
-            });
-            const data = await res.json();
-            updateSyncBanner(data.unixTime);
+            try {
+                const res = await fetch('/api/time', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ unixTime: Math.floor(Date.now() / 1000) }),
+                });
+                if (!res.ok) throw new Error('bad response');
+                const data = await res.json();
+                updateSyncBanner(data.unixTime);
+            } catch (err) {
+                showConnectionLost();
+            }
         }
 
         fetchAlarms();
