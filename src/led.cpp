@@ -12,6 +12,7 @@ static bool flashOn = false;
 static unsigned long lastToggleMs = 0;
 static const unsigned long FLASH_PERIOD_MS = 500;
 static bool ringing = false;
+static bool buttonHeld = false;
 
 void ledInit() {
   strip.begin();
@@ -53,7 +54,41 @@ void ledStartFlashTeal() {
 
 void ledStopFlash() {
   flashing = false;
-  ledOff();
+  if (!buttonHeld) {
+    ledOff();
+  }
+  // If the button is still physically held down right as this is called,
+  // leave the white held-indicator showing — ledSetButtonHeld() will
+  // resume the right thing once it's released. Turning it off here would
+  // stomp that feedback before the user even lets go.
+}
+
+// Direct, honest "yes, I see you holding the button" feedback: solid white
+// for exactly as long as the button is physically down, off the instant
+// it's released. Takes priority over the teal flash so pressing to exit
+// config mode doesn't get its feedback swallowed by ledStopFlash()'s
+// ledOff(). Call every loop() iteration with the button's current state —
+// it only actually does anything on a state change.
+void ledSetButtonHeld(bool held) {
+  if (held == buttonHeld) {
+    return; // no change
+  }
+  buttonHeld = held;
+
+  if (buttonHeld) {
+    ledSetColor(255, 255, 255);
+    return;
+  }
+
+  // Released — resume whatever ledUpdate() was doing before, same pattern
+  // as ledSetRinging()'s resume logic below.
+  if (flashing) {
+    flashOn = false;
+    lastToggleMs = millis();
+    ledSetColor(0, 0, 0);
+  } else {
+    ledOff();
+  }
 }
 
 void ledSetRinging(bool isRinging) {
@@ -82,6 +117,10 @@ void ledSetRinging(bool isRinging) {
 void ledUpdate() {
   if (ringing) {
     return; // stay solid white; skip the normal flash toggling entirely
+  }
+
+  if (buttonHeld) {
+    return; // solid white already set by ledSetButtonHeld()
   }
 
   if (!flashing) {

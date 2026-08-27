@@ -18,8 +18,7 @@
 #define BELL_RING_MS        4000     // default pulse length for a bell "ring" event
 
 // ---- Button / config mode ----
-#define BUTTON_ACTIVE_LOW      true
-#define BUTTON_DEBOUNCE_MS     40
+#define BUTTON_POLL_INTERVAL_MS   50 // 20 Hz; sampling this slowly is itself the debounce
 #define CONFIG_MODE_TIMEOUT_MS (5UL * 60UL * 1000UL) // auto-shutoff after 5 min idle
 
 // ---- Status LED ----

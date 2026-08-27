@@ -485,9 +485,11 @@
         <div class="alarm-list" id="alarm-list"></div>
     </div>
 
-    <div class="navbar" style="display: flex; justify-content: space-around; align-items: center; max-width: 800px; margin: 0 auto;">
-        <div class="navbar-action" style="cursor: pointer;" onclick="exitConfigMode()">&lt; Salir de Configuración</div>
-        <div class="navbar-action" style="cursor: pointer;" onclick="exitConfigMode()">Guardar</div>
+    <div style="position: fixed; bottom: 0.5rem; left: 0.5rem; right: 0.5rem; display: flex; justify-content: center; align-items: center; ">
+        <div style="padding: 0.5rem; width: 100%; display: flex; justify-content: space-between; align-items: center; max-width: 800px; background-color: #fff2; border-radius: 8px;">
+            <div class="navbar-action" style="cursor: pointer; background-color: #00000043; padding: 1rem 2rem; border-radius: 8px; font-weight: bold;" onclick="exitConfigMode()">Cancelar</div>
+            <div class="navbar-action" style="cursor: pointer; background-color: #008663; padding: 1rem 2rem; border-radius: 8px; font-weight: bold;" onclick="exitConfigMode()">Guardar y Salir</div>
+        </div>
     </div>
 
     <div class="modal-overlay" id="alarm-modal">

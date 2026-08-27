@@ -24,3 +24,10 @@ void ledStopFlash();
 // ringing stops. Call every loop() iteration with the relay's current
 // on/off state — it only actually does anything on a state change.
 void ledSetRinging(bool ringing);
+
+// Solid white for as long as the button is physically held down, off the
+// instant it's released — direct feedback that a press registered,
+// independent of whatever happens next (entering/exiting config mode,
+// which isn't instant). Call every loop() iteration with the button's
+// current state — it only actually does anything on a state change.
+void ledSetButtonHeld(bool held);
