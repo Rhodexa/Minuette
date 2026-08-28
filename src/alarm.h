@@ -19,7 +19,8 @@ struct Alarm {
   bool enabled;
   uint8_t hour;     // 0-23
   uint8_t minute;   // 0-59
-  uint8_t daysMask; // DOW_* bits
+  uint8_t daysMask; // DOW_* bits, ignored when `once` is set
+  bool once;        // fire at most once, then the caller deletes the slot
 };
 
 // Alarms live in fixed slots [0, MAX_ALARMS) on the 24C32N EEPROM.
@@ -35,5 +36,6 @@ bool alarmDelete(uint8_t slot);               // frees a slot
 int alarmAdd(const Alarm &a);
 
 // True if this alarm's schedule matches the given time (to the minute) and
-// it's enabled and scheduled for that day of the week.
+// it's enabled and scheduled for that day of the week — unless `once` is
+// set, in which case the day of week is ignored and any day matches.
 bool alarmMatches(const Alarm &a, const DateTimeFields &now);

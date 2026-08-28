@@ -48,6 +48,7 @@ static void alarmToJson(uint8_t slot, const Alarm &a, JsonObject obj) {
   obj["minute"] = a.minute;
   obj["days"] = a.daysMask;
   obj["enabled"] = a.enabled;
+  obj["once"] = a.once;
 }
 
 static void sendJson(int status, JsonDocument &doc) {
@@ -116,6 +117,7 @@ static void handlePostAlarm() {
   a.minute = doc["minute"] | 0;
   a.daysMask = doc["days"] | 0;
   a.enabled = doc["enabled"] | true;
+  a.once = doc["once"] | false;
 
   int slot = alarmAdd(a);
   if (slot < 0) {
@@ -149,6 +151,7 @@ static void handlePutAlarm() {
   a.minute = doc["minute"] | existing.minute;
   a.daysMask = doc["days"] | existing.daysMask;
   a.enabled = doc["enabled"] | existing.enabled;
+  a.once = doc["once"] | existing.once;
   alarmSet(slot, a);
 
   JsonDocument resp;
@@ -187,6 +190,7 @@ static void registerRoutes() {
   server.on("/", HTTP_GET, []() { serveFile("/index.html", "text/html"); });
   server.on("/minuta_ok.png", HTTP_GET, []() { serveFile("/minuta_ok.png", "image/png"); });
   server.on("/minuta_desync.png", HTTP_GET, []() { serveFile("/minuta_desync.png", "image/png"); });
+  server.on("/minuta_set.png", HTTP_GET, []() { serveFile("/minuta_set.png", "image/png"); });
 
   // Captive-portal detection probes fired by iOS/Android/Windows so the
   // phone auto-opens the portal instead of just silently joining the AP.

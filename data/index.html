@@ -148,10 +148,11 @@
         }
 
         .alarm-add-card {
-            background-color: #ffffff08;
-            border: 1px dashed #fff3;
+            background-color: #ffffff45;
+            border: 1px dashed rgba(255, 255, 255, 0.51);
             justify-content: center;
             cursor: pointer;
+            font-size: 2rem;
         }
 
         /* Tactile press feedback for anything tappable */
@@ -280,6 +281,7 @@
         }
 
         .modal-card {
+            position: relative;
             width: 100%;
             max-width: 340px;
             background: #1c333b;
@@ -288,6 +290,17 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
+            transform: translateY(-4rem);
+        }
+
+        .modal-icon {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 72px;
+            height: 72px;
+            transform: translate(-50%, -80%) scale(1.6);
+            pointer-events: none;
         }
 
         .time-input-row {
@@ -356,6 +369,12 @@
             display: flex;
             gap: 6px;
             justify-content: center;
+            transition: opacity 0.15s ease;
+        }
+
+        .day-pill-row.once-disabled {
+            opacity: 0.35;
+            pointer-events: none;
         }
 
         .day-pill {
@@ -480,9 +499,16 @@
         </div>
 
         <div class="alarm-card alarm-add-card" onclick="openAlarmModal(null)">
-            +
+            <span style="transform: scale(1.5);">+</span>
         </div>
+
         <div class="alarm-list" id="alarm-list"></div>
+
+        <div class="alarm-list" style="opacity: 0.3; text-align: center; padding-top: 5rem;">
+            <p>Designed by <b>Rhodune! Lab</b> with Love ❤️</p>
+            <a href="https://github.com/Rhodexa/Minuette" style="color: white;">https://github.com/Rhodexa/Minuette</a>
+            <p>🇦🇷</p>
+        </div>
     </div>
 
     <div style="position: fixed; bottom: 0.5rem; left: 0.5rem; right: 0.5rem; display: flex; justify-content: center; align-items: center; ">
@@ -494,7 +520,7 @@
 
     <div class="modal-overlay" id="alarm-modal">
         <div class="modal-card">
-            <h3 id="modal-title">Nueva alarma</h3>
+            <img src="minuta_set.png" class="modal-icon" alt="">
 
             <div class="time-input-row">
                 <div class="time-field">
@@ -516,6 +542,14 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"></polyline></svg>
                     </button>
                 </div>
+            </div>
+
+            <div class="switch-row">
+                <span>Solo una vez</span>
+                <label class="switch">
+                    <input type="checkbox" id="modal-once" onchange="updateOnceState()">
+                    <span class="slider"></span>
+                </label>
             </div>
 
             <div class="day-pill-row" id="modal-days"></div>
@@ -601,7 +635,9 @@
         function minutesUntilNext(alarm, nowDay, nowMinutes) {
             for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
                 const day = (nowDay + dayOffset) % 7;
-                if (!(alarm.days & (1 << day))) continue;
+                // "once" alarms ignore daysMask on the device too (see alarmMatches()
+                // in alarm.cpp) — they fire on whichever day comes next.
+                if (!alarm.once && !(alarm.days & (1 << day))) continue;
                 const alarmMinutes = alarm.hour * 60 + alarm.minute;
                 if (dayOffset === 0 && alarmMinutes <= nowMinutes) continue;
                 return dayOffset * 1440 + alarmMinutes - nowMinutes;
@@ -612,7 +648,7 @@
         // Shared by the "Siguiente a las" line and the hourglass badge, so
         // both always agree on which alarm is actually next.
         function findNextAlarm() {
-            const active = alarms.filter(a => a.enabled && a.days !== 0);
+            const active = alarms.filter(a => a.enabled && (a.once || a.days !== 0));
             if (active.length === 0) {
                 return null;
             }
@@ -672,7 +708,7 @@
                 const info = document.createElement('div');
                 info.innerHTML = `
                     <div class="alarm-time">${pad2(alarm.hour)}:${pad2(alarm.minute)}</div>
-                    <div class="alarm-days">${describeDays(alarm.days)}</div>
+                    <div class="alarm-days">${alarm.once ? 'Solo por hoy' : describeDays(alarm.days)}</div>
                 `;
 
                 const actions = document.createElement('div');
@@ -779,27 +815,35 @@
             el.value = pad2(next);
         }
 
+        // Days don't matter once the alarm is set to fire only once, so
+        // gray out (and disable) the day pills while "Solo una vez" is on.
+        function updateOnceState() {
+            const once = document.getElementById('modal-once').checked;
+            document.getElementById('modal-days').classList.toggle('once-disabled', once);
+        }
+
         function openAlarmModal(id) {
             editingId = id;
             const modal = document.getElementById('alarm-modal');
-            const title = document.getElementById('modal-title');
             const enabledInput = document.getElementById('modal-enabled');
+            const onceInput = document.getElementById('modal-once');
 
             if (id === null) {
-                title.textContent = 'Nueva alarma';
                 modalHourInput.value = '08';
                 modalMinuteInput.value = '00';
                 enabledInput.checked = true;
+                onceInput.checked = false;
                 renderDayPills(DOW_WEEKDAYS);
             } else {
                 const alarm = alarms.find(a => a.id === id);
-                title.textContent = 'Editar alarma';
                 modalHourInput.value = pad2(alarm.hour);
                 modalMinuteInput.value = pad2(alarm.minute);
                 enabledInput.checked = alarm.enabled;
+                onceInput.checked = !!alarm.once;
                 renderDayPills(alarm.days);
             }
 
+            updateOnceState();
             modal.classList.add('open');
         }
 
@@ -812,6 +856,7 @@
             const hour = clamp(parseInt(modalHourInput.value, 10) || 0, 0, 23);
             const minute = clamp(parseInt(modalMinuteInput.value, 10) || 0, 0, 59);
             const enabled = document.getElementById('modal-enabled').checked;
+            const once = document.getElementById('modal-once').checked;
             let days = 0;
             document.querySelectorAll('#modal-days .day-pill').forEach(pill => {
                 if (pill.classList.contains('active')) {
@@ -819,7 +864,7 @@
                 }
             });
 
-            const payload = { hour, minute, days, enabled };
+            const payload = { hour, minute, days, enabled, once };
             const url = editingId === null ? '/api/alarms' : `/api/alarms/${editingId}`;
             const method = editingId === null ? 'POST' : 'PUT';
             await fetch(url, {

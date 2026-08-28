@@ -4,7 +4,7 @@
 #include "pins.h"
 #include "config.h"
 
-static const int LONG_PRESS_FRAMES = 20; // ~1s
+static const int LONG_PRESS_FRAMES = 2; // 100ms
 
 static bool last_state = false;
 static bool current_state = false;

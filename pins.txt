@@ -1,4 +1,3 @@
-WS2812 GPIO6
 General Purpose Button GPIO9
 SDA GPIO8
 SCL GPIO10
@@ -7,3 +6,4 @@ Relay GPIO4
 Hardware
 DS3231M
 24C32N
+SH1106 OLED 128x64 (on the shared I2C bus)

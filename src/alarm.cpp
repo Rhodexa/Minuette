@@ -2,8 +2,13 @@
 #include "eeprom24c32.h"
 #include "config.h"
 
-// On-EEPROM layout per slot (5 bytes): [valid][enabled][hour][minute][daysMask]
+// On-EEPROM layout per slot (5 bytes): [valid][flags][hour][minute][daysMask]
+// flags packs multiple booleans into one byte so adding one doesn't reshuffle
+// every slot's address — old records only ever wrote 0x00/0x01 here, so any
+// newly-added flag bit reads back as 0 (its "off"/legacy default) for them.
 static const uint8_t RECORD_SIZE = 5;
+static const uint8_t FLAG_ENABLED = 1 << 0;
+static const uint8_t FLAG_ONCE = 1 << 1;
 
 static uint16_t slotAddr(uint8_t slot) {
   return ALARM_STORAGE_ADDR + (uint16_t)slot * RECORD_SIZE;
@@ -20,10 +25,11 @@ bool alarmGet(uint8_t slot, Alarm *out) {
   if (raw[0] != ALARM_MAGIC) {
     return false; // empty slot
   }
-  out->enabled = raw[1] != 0;
+  out->enabled = (raw[1] & FLAG_ENABLED) != 0;
   out->hour = raw[2];
   out->minute = raw[3];
   out->daysMask = raw[4];
+  out->once = (raw[1] & FLAG_ONCE) != 0;
   return true;
 }
 
@@ -31,9 +37,10 @@ bool alarmSet(uint8_t slot, const Alarm &a) {
   if (slot >= MAX_ALARMS) {
     return false;
   }
+  uint8_t flags = (a.enabled ? FLAG_ENABLED : 0) | (a.once ? FLAG_ONCE : 0);
   uint8_t raw[RECORD_SIZE] = {
     ALARM_MAGIC,
-    (uint8_t)(a.enabled ? 1 : 0),
+    flags,
     a.hour,
     a.minute,
     a.daysMask,
@@ -65,7 +72,7 @@ bool alarmMatches(const Alarm &a, const DateTimeFields &now) {
   if (!a.enabled) {
     return false;
   }
-  if ((a.daysMask & (1 << now.dayOfWeek)) == 0) {
+  if (!a.once && (a.daysMask & (1 << now.dayOfWeek)) == 0) {
     return false;
   }
   return a.hour == now.hour && a.minute == now.minute;
