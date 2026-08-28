@@ -3,7 +3,6 @@
 
 #include "pins.h"
 #include "config.h"
-#include "relay.h"
 #include "rtc.h"
 #include "eeprom24c32.h"
 #include "alarm.h"
@@ -23,6 +22,45 @@
 static bool in_config_mode = false;
 static unsigned long config_inactivity_timeout = 0;
 static bool config_exit_requested = false;
+
+
+
+
+
+// display statemachine
+bool display_needs_update = true;
+bool display_cleared = false;
+
+// splash and code
+int display_show_splash_timer = 5;
+int display_show_code_link_timer = 10;
+
+// display config
+bool display_config_show = false;
+int display_config_mode_animation_timer = 0;
+
+// display_clock_show
+bool display_clock_show = true;
+unsigned long  display_last_update = 0;
+int display_clock_show_frame_counter = 0;
+DateTimeFields display_clock_show_data;
+
+static uint8_t lastCheckedMinute = 255;
+
+
+
+
+
+
+// Bell relay on PIN_RELAY. Polarity is set by RELAY_ACTIVE_HIGH in config.h.
+static inline void setRelay(bool on)
+{
+	digitalWrite(PIN_RELAY, on == RELAY_ACTIVE_HIGH ? HIGH : LOW);
+}
+
+// Counts down once per second (see the 1Hz tick in loop()) while the bell
+// rings; drives both the relay and the bell icon so they can't drift apart.
+int sound_timer = 0;
 
 // Any real activity in config mode (a web request, not just the button)
 // pushes the inactivity shutoff back out. Called from web_server.cpp too.
@@ -66,8 +104,6 @@ static void exitConfigMode()
 	Serial.println("[config] exited (timeout or explicit)");
 }
 
-static uint8_t lastCheckedMinute = 255;
-
 static void checkAlarms(const DateTimeFields &now)
 {
 	if (now.minute == lastCheckedMinute)
@@ -86,7 +122,9 @@ static void checkAlarms(const DateTimeFields &now)
 		if (alarmMatches(a, now))
 		{
 			Serial.printf("[alarm] slot %u fired at %02u:%02u\n", slot, now.hour, now.minute);
-			relayPulse();
+			setRelay(true);
+			sound_timer = BELL_RING_MS / 1000;
+			display_needs_update = true;
 			if (a.once)
 			{
 				alarmDelete(slot); // "solo una vez" — consume the slot so it doesn't fire again
@@ -102,7 +140,8 @@ void setup()
 
 	Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
 
-	relayInit();
+	pinMode(PIN_RELAY, OUTPUT);
+	setRelay(false);
 	buttonInit();
 	oledInit();
 	oledClear();
@@ -132,39 +171,11 @@ void setup()
 	}
 }
 
-
-
-
-
-
-
-// display statemachine
-bool display_needs_update = true;
-bool display_cleared = false;
-
-// splash and code
-int display_show_splash_timer = 5;
-int display_show_code_link_timer = 10;
-
-// display bell
-int display_bell_show = 0;
-
-// display config
-bool display_config_show = false;
-int display_config_mode_animation_timer = 0;
-
-// display_clock_show
-bool display_clock_show = true;
-unsigned long  display_last_update = 0;
-int display_clock_show_frame_counter = 0;
-DateTimeFields display_clock_show_data;
-
 void loop()
 {
 	unsigned long now = millis();
 
 	buttonUpdate();
-	relayUpdate();
 
 	if (buttonEventLongPress())
 	{
@@ -254,9 +265,12 @@ void loop()
 			
 		}
 
-		else if(display_bell_show > 0) {
+		else if(sound_timer > 0) {
 			oledDrawBitmap(1, 39, oledIconBell);
-			display_bell_show--;
+			sound_timer--;
+			if(sound_timer == 0) {
+				setRelay(false);
+			}
 		}
 		
 		else if(display_clock_show) {
@@ -272,7 +286,7 @@ void loop()
 		if(
 			display_clock_show ||
 			display_config_show ||
-			(display_bell_show > 0)
+			(sound_timer > 0)
 		) {
 			oledBufFlush();
 			display_cleared = false;

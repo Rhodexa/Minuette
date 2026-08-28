@@ -2,10 +2,6 @@
 #include "eeprom24c32.h"
 #include "config.h"
 
-// On-EEPROM layout per slot (5 bytes): [valid][flags][hour][minute][daysMask]
-// flags packs multiple booleans into one byte so adding one doesn't reshuffle
-// every slot's address — old records only ever wrote 0x00/0x01 here, so any
-// newly-added flag bit reads back as 0 (its "off"/legacy default) for them.
 static const uint8_t RECORD_SIZE = 5;
 static const uint8_t FLAG_ENABLED = 1 << 0;
 static const uint8_t FLAG_ONCE = 1 << 1;
