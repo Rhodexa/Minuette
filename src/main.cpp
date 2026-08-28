@@ -23,13 +23,8 @@ static bool in_config_mode = false;
 static unsigned long config_inactivity_timeout = 0;
 static bool config_exit_requested = false;
 
-
-
-
-
 // display statemachine
-bool display_needs_update = true;
-bool display_cleared = false;
+bool display_paint_requested = true;
 
 // splash and code
 int display_show_splash_timer = 5;
@@ -40,27 +35,21 @@ bool display_config_show = false;
 int display_config_mode_animation_timer = 0;
 
 // display_clock_show
-bool display_clock_show = true;
-unsigned long  display_last_update = 0;
-int display_clock_show_frame_counter = 0;
+int display_clock_show = 60;
+unsigned long display_last_update = 0;
+
 DateTimeFields display_clock_show_data;
 
 static uint8_t lastCheckedMinute = 255;
 
-
-
-
-
+// bell timer
+int sound_timer = 0;
 
 // Bell relay on PIN_RELAY. Polarity is set by RELAY_ACTIVE_HIGH in config.h.
 static inline void setRelay(bool on)
 {
 	digitalWrite(PIN_RELAY, on == RELAY_ACTIVE_HIGH ? HIGH : LOW);
 }
-
-// Counts down once per second (see the 1Hz tick in loop()) while the bell
-// rings; drives both the relay and the bell icon so they can't drift apart.
-int sound_timer = 0;
 
 // Any real activity in config mode (a web request, not just the button)
 // pushes the inactivity shutoff back out. Called from web_server.cpp too.
@@ -124,7 +113,8 @@ static void checkAlarms(const DateTimeFields &now)
 			Serial.printf("[alarm] slot %u fired at %02u:%02u\n", slot, now.hour, now.minute);
 			setRelay(true);
 			sound_timer = BELL_RING_MS / 1000;
-			display_needs_update = true;
+			display_clock_show = 60;
+			display_paint_requested = true;
 			if (a.once)
 			{
 				alarmDelete(slot); // "solo una vez" — consume the slot so it doesn't fire again
@@ -179,8 +169,8 @@ void loop()
 
 	if (buttonEventLongPress())
 	{
-		display_clock_show = true;
-		display_needs_update = true;
+		display_clock_show = 60;
+		display_paint_requested = true;
 		if (in_config_mode)
 		{
 			exitConfigMode();
@@ -212,94 +202,100 @@ void loop()
 	}
 
 	// draw clock on screen
+
+	bool display_needs_flush = true;
+
 	display_config_show = in_config_mode;
 
-	if(now - display_last_update >= 1000) {
+	if (now - display_last_update >= 1000)
+	{
 		display_last_update = now;
-		display_needs_update = true;
+		display_paint_requested = true;
 	}
 
-	if (display_needs_update) {
-		display_needs_update = false;
+	if (display_paint_requested)
+	{
+		display_paint_requested = false;
 		oledBufClear();
-		
-		if(display_show_splash_timer) {
+
+
+		// Priotity tree
+		if (display_show_splash_timer)
+		{
 			oledDrawBitmap(0, 11, oledIconSplash);
 			display_show_splash_timer--;
 		}
-		else if (display_show_code_link_timer) {
+
+		else if (display_show_code_link_timer)
+		{
 			oledDrawBitmap(1, 32, oledIconCodeLink);
 			oledBufPrintText(4, 34, "github.com");
 			oledBufPrintText(5, 13, "/Rhodexa/Minuette");
 			display_show_code_link_timer--;
 		}
 
-		else if(display_config_show) {
-			display_config_mode_animation_timer ++;
-			if(display_config_mode_animation_timer > 35) {
+		else if (display_config_show)
+		{
+			display_config_mode_animation_timer++;
+			if (display_config_mode_animation_timer > 35)
+			{
 				display_config_mode_animation_timer = 5;
 			}
-			if(display_config_mode_animation_timer < 5) {
+			if (display_config_mode_animation_timer < 5)
+			{
 				oledDrawBitmap(0, 67, oledIconConfig);
 				oledBufPrintText(5, 0, "Entrando");
 				oledBufPrintText(6, 0, "en modo");
 				oledBufPrintText(7, 0, "Configuracion");
 			}
-			else if (display_config_mode_animation_timer < 15) {
+			else if (display_config_mode_animation_timer < 15)
+			{
 				oledDrawBitmap(1, 0, oledIconWifi);
 				oledBufClearPage(6);
 				oledBufClearPage(7);
-				if(display_config_mode_animation_timer < 8)
+				if (display_config_mode_animation_timer < 8)
 					oledBufPrintText(7, 1, "...para configurar...");
 				else
 					oledBufPrintText(7, 1, "Conectate a mi Wi-Fi!");
 			}
 			else if (display_config_mode_animation_timer < 25)
 				oledDrawBitmap(0, 0, oledIconPass);
-			else {
+			else
+			{
 				oledBufPrintText(1, 0, "Wi-Fi: Minuette");
 				oledBufPrintText(3, 0, "Calve: minuta12345");
 				oledBufPrintText(6, 0, "Link de configuracion:");
 				oledBufPrintText(7, 0, "http://192.168.4.1");
 			}
-			
-		}
+		} // diplay_config_show
 
-		else if(sound_timer > 0) {
+		else if (sound_timer > 0)
+		{
 			oledDrawBitmap(1, 39, oledIconBell);
 			sound_timer--;
-			if(sound_timer == 0) {
+			if (sound_timer == 0)
+			{
 				setRelay(false);
 			}
+		} // sound_timer
+
+		else if (display_clock_show > 0)
+		{
+			display_clock_show_data = rtcNow();
+			oledDrawClock(display_clock_show_data.hour, display_clock_show_data.minute, display_clock_show & 1);
+			display_clock_show--;
 		}
 		
-		else if(display_clock_show) {
-			display_clock_show_data = rtcNow();
-			oledDrawClock(display_clock_show_data.hour, display_clock_show_data.minute, display_clock_show_frame_counter & 1);
-			display_clock_show_frame_counter++;
-			if(display_clock_show_frame_counter > 60) {
-				display_clock_show_frame_counter = 0;
-				display_clock_show = false;
-			}
-		}
-
-		if(
-			display_clock_show ||
-			display_config_show ||
-			(sound_timer > 0)
-		) {
-			oledBufFlush();
-			display_cleared = false;
-		}
 		else {
-			if(!display_cleared) {
-				oledBufClear();
-				oledBufFlush();
-				display_cleared = true;
-			} 
+			display_needs_flush = false;
 		}
-	}
 
+		if (display_needs_flush)
+		{
+			oledBufFlush();
+		}
+		
+	}
 
 	static unsigned long lastRtcPollMs = 0;
 	if (now - lastRtcPollMs >= 1000)
