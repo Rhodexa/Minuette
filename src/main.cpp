@@ -9,9 +9,10 @@
 #include "button.h"
 #include "wifi_ap.h"
 #include "web_server.h"
+
+// OLED graphics
 #include "oled.h"
 #include "oled_gfx.h"
-
 #include "oled_icon_bell.h"
 #include "oled_icon_splash.h"
 #include "oled_icon_code_link.h"
@@ -19,14 +20,26 @@
 #include "oled_icon_wifi.h"
 #include "oled_icon_pass.h"
 
+
+
+
+
+
+
+
+
+
 static bool in_config_mode = false;
 static unsigned long config_inactivity_timeout = 0;
 static bool config_exit_requested = false;
 
 // display statemachine
+const int DISPLAY_OFF_TIMEOUT = 60;
 bool display_paint_requested = true;
+unsigned long display_last_update = 0;
+int display_off_timer = DISPLAY_OFF_TIMEOUT;
 
-// splash and code
+// logo and code / splash screen
 int display_show_splash_timer = 5;
 int display_show_code_link_timer = 10;
 
@@ -34,22 +47,51 @@ int display_show_code_link_timer = 10;
 bool display_config_show = false;
 int display_config_mode_animation_timer = 0;
 
-// display_clock_show
-int display_clock_show = 60;
-unsigned long display_last_update = 0;
-
+// display clock
 DateTimeFields display_clock_show_data;
+
+// bell timer
+const int RING_LENGTH_SHORT = 10;  // 1s
+const int RING_LENGTH_NORMAL = 30; // 3s
+const int RING_LENGTH_LONGER = 45; // 4.5s
+
+unsigned long last_ringer_timer_tick = 0;
+int ringer_ring_length = RING_LENGTH_NORMAL;
+int ringer_timer = 0;
 
 static uint8_t lastCheckedMinute = 255;
 
-// bell timer
-int sound_timer = 0;
+
+
+
+
+
+
+
+
 
 // Bell relay on PIN_RELAY. Polarity is set by RELAY_ACTIVE_HIGH in config.h.
-static inline void setRelay(bool on)
+static inline void relay_set(bool on)
 {
 	digitalWrite(PIN_RELAY, on == RELAY_ACTIVE_HIGH ? HIGH : LOW);
 }
+
+
+
+
+
+
+static inline void displayOn()
+{
+	display_off_timer = DISPLAY_OFF_TIMEOUT;
+}
+
+
+
+
+
+
+
 
 // Any real activity in config mode (a web request, not just the button)
 // pushes the inactivity shutoff back out. Called from web_server.cpp too.
@@ -75,32 +117,43 @@ static void enterConfigMode()
 	oledDrawBitmap(1, 34, oledIconConfig);
 	oledBufPrintText(7, 16, "Configuracion...");
 	oledBufFlush();
+
 	in_config_mode = true;
 	configModeTouch();
 	wifiApStart();
 	webServerStart();
+
 	Serial.println("[config] entered");
 }
 
 static void exitConfigMode()
 {
 	oledBufClear();
-	oledBufPrintText(1, 8, "Saliendo...");
+	oledBufPrintText(1, 8, "Saliendo");
+	oledBufPrintText(2, 8, "modo Configuracion...");
 	oledBufFlush();
+
 	in_config_mode = false;
 	webServerStop();
 	wifiApStop();
+
 	Serial.println("[config] exited (timeout or explicit)");
 }
 
+
+
+
+
+
+
+
+
 static void checkAlarms(const DateTimeFields &now)
 {
-	if (now.minute == lastCheckedMinute)
-	{
-		return; // only need to check once per minute
-	}
+	if (now.minute == lastCheckedMinute) return;
 	lastCheckedMinute = now.minute;
 
+	// runs once per minute
 	for (uint8_t slot = 0; slot < MAX_ALARMS; slot++)
 	{
 		Alarm a;
@@ -111,9 +164,9 @@ static void checkAlarms(const DateTimeFields &now)
 		if (alarmMatches(a, now))
 		{
 			Serial.printf("[alarm] slot %u fired at %02u:%02u\n", slot, now.hour, now.minute);
-			setRelay(true);
-			sound_timer = BELL_RING_MS / 1000;
-			display_clock_show = 60;
+			relay_set(true);
+			ringer_timer = ringer_ring_length;
+			displayOn();
 			display_paint_requested = true;
 			if (a.once)
 			{
@@ -123,6 +176,15 @@ static void checkAlarms(const DateTimeFields &now)
 	}
 }
 
+
+
+
+
+
+
+
+
+
 void setup()
 {
 	Serial.begin(115200);
@@ -131,7 +193,7 @@ void setup()
 	Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
 
 	pinMode(PIN_RELAY, OUTPUT);
-	setRelay(false);
+	relay_set(false);
 	buttonInit();
 	oledInit();
 	oledClear();
@@ -161,6 +223,13 @@ void setup()
 	}
 }
 
+
+
+
+
+
+
+
 void loop()
 {
 	unsigned long now = millis();
@@ -169,7 +238,7 @@ void loop()
 
 	if (buttonEventLongPress())
 	{
-		display_clock_show = 60;
+		displayOn();
 		display_paint_requested = true;
 		if (in_config_mode)
 		{
@@ -201,9 +270,38 @@ void loop()
 		}
 	}
 
-	// draw clock on screen
 
-	bool display_needs_flush = true;
+
+
+
+
+	// Handle alarms
+	static unsigned long lastRtcPollMs = 0;
+	if (now - lastRtcPollMs >= 1000)
+	{
+		lastRtcPollMs = now;
+		checkAlarms(rtcNow());
+	}
+
+	// Bell timer
+	if(now - last_ringer_timer_tick >= 100) {
+		if (ringer_timer > 0)
+		{
+			ringer_timer--;
+			if (ringer_timer == 0)
+			{
+				relay_set(false);
+			}
+		}
+	}
+
+
+
+
+
+	// Display painting routine:
+
+	bool display_needs_wipe = true;
 
 	display_config_show = in_config_mode;
 
@@ -219,7 +317,9 @@ void loop()
 		oledBufClear();
 
 
-		// Priotity tree
+		// Priotity Tree
+		// Splash screen page 1 and 2. Show up only at boot with max priority
+		// Could be moved to setup, really
 		if (display_show_splash_timer)
 		{
 			oledDrawBitmap(0, 11, oledIconSplash);
@@ -234,8 +334,17 @@ void loop()
 			display_show_code_link_timer--;
 		}
 
+		// Show bell icon over anything if ringing
+		else if (ringer_timer > 0)
+		{
+			displayOn();
+			oledDrawBitmap(1, 39, oledIconBell);
+		}
+
+		// Configuration slideshow takes over clock
 		else if (display_config_show)
 		{
+			displayOn();
 			display_config_mode_animation_timer++;
 			if (display_config_mode_animation_timer > 35)
 			{
@@ -263,44 +372,34 @@ void loop()
 			else
 			{
 				oledBufPrintText(1, 0, "Wi-Fi: Minuette");
-				oledBufPrintText(3, 0, "Calve: minuta12345");
+				oledBufPrintText(3, 0, "Clave: minuta12345");
 				oledBufPrintText(6, 0, "Link de configuracion:");
 				oledBufPrintText(7, 0, "http://192.168.4.1");
 			}
-		} // diplay_config_show
+		}
 
-		else if (sound_timer > 0)
-		{
-			oledDrawBitmap(1, 39, oledIconBell);
-			sound_timer--;
-			if (sound_timer == 0)
-			{
-				setRelay(false);
-			}
-		} // sound_timer
 
-		else if (display_clock_show > 0)
+		// Show clock by default
+		else if (display_off_timer > 0)
 		{
 			display_clock_show_data = rtcNow();
-			oledDrawClock(display_clock_show_data.hour, display_clock_show_data.minute, display_clock_show & 1);
-			display_clock_show--;
-		}
-		
+			oledDrawClock(display_clock_show_data.hour, display_clock_show_data.minute, now & 0x400);
+			display_off_timer--;
+		} // show_clock
+
+
+		// Display timer ran out... turn off
 		else {
-			display_needs_flush = false;
+			if(display_needs_wipe) {
+				oledClear();
+			}
+			display_needs_wipe = false;
 		}
 
-		if (display_needs_flush)
+		if (display_off_timer > 0)
 		{
 			oledBufFlush();
 		}
 		
-	}
-
-	static unsigned long lastRtcPollMs = 0;
-	if (now - lastRtcPollMs >= 1000)
-	{
-		lastRtcPollMs = now;
-		checkAlarms(rtcNow());
 	}
 }

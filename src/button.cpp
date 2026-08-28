@@ -4,7 +4,7 @@
 #include "pins.h"
 #include "config.h"
 
-static const int LONG_PRESS_FRAMES = 2; // 100ms
+static const int LONG_PRESS_FRAMES = 3;
 
 static bool last_state = false;
 static bool current_state = false;
@@ -56,6 +56,7 @@ void buttonUpdate()
 			press_timer = 0;
 		}
 	}
+	last_state = current_state;
 }
 
 bool buttonState() {
