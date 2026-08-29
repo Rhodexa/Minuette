@@ -17,10 +17,10 @@ static const uint8_t OLED_HEIGHT_PAGES = 8; // 8 pages * 8px = 64px tall
 void oledInit();
 
 // Fills every page with 0x00 (blank).
-void oledClear();
+void oledRawClear();
 
 // Fills one page (0-7) with 0x00.
-void oledClearPage(uint8_t page);
+void oledRawClearPage(uint8_t page);
 
 // Writes `count` column bytes into `page` (0-7), starting at `startCol`
 // (0-127), in SH1106's native page/column format described above. Goes
@@ -33,25 +33,25 @@ void oledWritePage(uint8_t page, uint8_t startCol, const uint8_t *columns, uint8
 //
 // A second, RAM-side copy of the panel's 1024 bytes (128 cols x 8 pages),
 // laid out exactly like the panel's own page/column format. Draw into it
-// with oledBufWritePage()/oledBufClear() — same shapes as the functions
+// with oledBufWritePage()/oledClearBuffer() — same shapes as the functions
 // above, just landing in RAM instead of going out over I2C — then call
-// oledBufFlush() once to send the whole thing to the panel in one shot.
+// oledPushBuffer() once to send the whole thing to the panel in one shot.
 //
 // Worth it when you're building up several pieces of a screen (icon + big
 // numbers + text) and don't want each piece to flash into view separately
 // as it's drawn — draw everything into the buffer first, then flush once.
 
 // Fills the whole buffer with 0x00 (blank). Doesn't touch the panel.
-void oledBufClear();
+void oledClearBuffer();
 
 // Fills one page (0-7) of the buffer with 0x00. Doesn't touch the panel.
-void oledBufClearPage(uint8_t page);
+void oledClearBufferPage(uint8_t page);
 
 // Same as oledWritePage(), but writes into the buffer instead of the panel.
 void oledBufWritePage(uint8_t page, uint8_t startCol, const uint8_t *columns, uint8_t count);
 
 // Sends the entire buffer to the panel, page by page.
-void oledBufFlush();
+void oledPushBuffer();
 
 // 0 (dim) - 255 (brightest). Panel default is roughly mid-range.
 void oledSetContrast(uint8_t value);
@@ -71,7 +71,7 @@ void oledSetInverted(bool inverted);
 //
 // Each comes in a straight-to-panel flavor and a Buf flavor, same as the
 // page writers above — use the Buf ones when the text is part of a screen
-// you're building up in the buffer before one oledBufFlush().
+// you're building up in the buffer before one oledPushBuffer().
 
 // Draws one character at (page, col) and returns the column just past it
 // (col + 6), so calls can be chained to lay out text piece by piece.
@@ -81,5 +81,5 @@ uint8_t oledBufPrintChar(uint8_t page, uint8_t col, char c);
 // Draws a whole string starting at (page, col), stopping early if it runs
 // off the right edge of the panel. Returns the column just past the last
 // character drawn.
+uint8_t oledRawPrintText(uint8_t page, uint8_t col, const char *text);
 uint8_t oledPrintText(uint8_t page, uint8_t col, const char *text);
-uint8_t oledBufPrintText(uint8_t page, uint8_t col, const char *text);

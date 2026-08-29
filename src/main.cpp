@@ -20,7 +20,22 @@
 #include "oled_icon_wifi.h"
 #include "oled_icon_pass.h"
 
+// You can disable the splashscreen. Useful for faster development boots... 
+// or... if you simply hate it.
+bool display_splashscreen_disable = false;
 
+
+
+
+
+
+
+/* hardware error flags, they gusually get set on boot if hardware is missing from the I2C lines... or hardware on the I2C is in a problematic state */
+/* these are purely informative, and can be used to display errors on the screen or serial port at boot. */
+bool error_flag_rtc_lost_power = false;
+bool error_flag_rtc_not_found = false;
+bool error_flag_eeprom_not_found = false;
+bool error_flag_display_not_found = false;
 
 
 
@@ -38,10 +53,6 @@ const int DISPLAY_OFF_TIMEOUT = 60;
 bool display_paint_requested = true;
 unsigned long display_last_update = 0;
 int display_off_timer = DISPLAY_OFF_TIMEOUT;
-
-// logo and code / splash screen
-int display_show_splash_timer = 5;
-int display_show_code_link_timer = 10;
 
 // display config
 bool display_config_show = false;
@@ -113,10 +124,11 @@ void requestConfigModeExit()
 
 static void enterConfigMode()
 {
-	oledBufClear();
+	// sometimes, entering config mode takes a little longer... this hints the user to be patient
+	oledClearBuffer();
 	oledDrawBitmap(1, 34, oledIconConfig);
-	oledBufPrintText(7, 16, "Configuracion...");
-	oledBufFlush();
+	oledPrintText(7, 16, "Configuracion...");
+	oledPushBuffer();
 
 	in_config_mode = true;
 	configModeTouch();
@@ -128,10 +140,11 @@ static void enterConfigMode()
 
 static void exitConfigMode()
 {
-	oledBufClear();
-	oledBufPrintText(1, 8, "Saliendo");
-	oledBufPrintText(2, 8, "modo Configuracion...");
-	oledBufFlush();
+	// sometimes, exiting config mode takes a little longer... this hints the user to be patient
+	oledClearBuffer();
+	oledPrintText(1, 8, "Saliendo");
+	oledPrintText(2, 8, "modo Configuracion...");
+	oledPushBuffer();
 
 	in_config_mode = false;
 	webServerStop();
@@ -184,6 +197,54 @@ static void checkAlarms(const DateTimeFields &now)
 
 
 
+void displayShowErrors(){
+	// Print errors if any
+	oledClearBuffer();
+	int line = 0;
+	if(error_flag_rtc_lost_power) {
+		line++;
+		oledPrintText(line, 8, "W: RTC got Reset");
+	}
+	
+	if(error_flag_rtc_not_found) {
+		line++;
+		oledPrintText(line, 8, "E: RTC Comms Fail");
+	}
+	
+	if(error_flag_rtc_not_found) {
+		line++;
+		oledPrintText(line, 8, "E: EEPROM Comms Fail");
+	}
+	if(line) delay(10000);
+	oledPushBuffer();
+}
+
+void displayShowSplashScreen()
+{
+	if(display_splashscreen_disable) return;
+
+	oledClearBuffer();
+	oledDrawBitmap(0, 11, oledIconSplash);
+	oledPushBuffer();
+
+	delay(5000);
+
+	oledClearBuffer();
+	oledDrawBitmap(1, 32, oledIconCodeLink);
+	oledPrintText(4, 34, "github.com");
+	oledPrintText(5, 13, "/Rhodexa/Minuette");
+	oledPushBuffer();
+
+	delay(10000);
+}
+
+
+
+
+
+
+
+
 
 void setup()
 {
@@ -196,14 +257,16 @@ void setup()
 	relay_set(false);
 	buttonInit();
 	oledInit();
-	oledClear();
+	oledRawClear();
 
 	if (!rtcInit())
 	{
+		error_flag_rtc_not_found = true;
 		Serial.println("[rtc] DS3231M not found!");
 	}
 	else if (rtcLostPower())
 	{
+		error_flag_rtc_lost_power = true;
 		Serial.println("[rtc] lost power — time needs to be set (e.g. from the config page)");
 	}
 	else
@@ -215,12 +278,16 @@ void setup()
 
 	if (!eepromInit())
 	{
+		error_flag_eeprom_not_found = true;
 		Serial.println("[eeprom] 24C32N not found!");
 	}
 	else
 	{
 		Serial.println("[eeprom] ok");
 	}
+
+	displayShowErrors(); // show errors, if any...
+	displayShowSplashScreen();
 }
 
 
@@ -314,28 +381,13 @@ void loop()
 	if (display_paint_requested)
 	{
 		display_paint_requested = false;
-		oledBufClear();
+		oledClearBuffer();
 
 
 		// Priotity Tree
-		// Splash screen page 1 and 2. Show up only at boot with max priority
-		// Could be moved to setup, really
-		if (display_show_splash_timer)
-		{
-			oledDrawBitmap(0, 11, oledIconSplash);
-			display_show_splash_timer--;
-		}
 
-		else if (display_show_code_link_timer)
-		{
-			oledDrawBitmap(1, 32, oledIconCodeLink);
-			oledBufPrintText(4, 34, "github.com");
-			oledBufPrintText(5, 13, "/Rhodexa/Minuette");
-			display_show_code_link_timer--;
-		}
-
-		// Show bell icon over anything if ringing
-		else if (ringer_timer > 0)
+		// show bell icon if currently sounding
+		if (ringer_timer > 0)
 		{
 			displayOn();
 			oledDrawBitmap(1, 39, oledIconBell);
@@ -353,28 +405,28 @@ void loop()
 			if (display_config_mode_animation_timer < 5)
 			{
 				oledDrawBitmap(0, 67, oledIconConfig);
-				oledBufPrintText(5, 0, "Entrando");
-				oledBufPrintText(6, 0, "en modo");
-				oledBufPrintText(7, 0, "Configuracion");
+				oledPrintText(5, 0, "Entrando");
+				oledPrintText(6, 0, "en modo");
+				oledPrintText(7, 0, "Configuracion");
 			}
 			else if (display_config_mode_animation_timer < 15)
 			{
 				oledDrawBitmap(1, 0, oledIconWifi);
-				oledBufClearPage(6);
-				oledBufClearPage(7);
+				oledClearBufferPage(6);
+				oledClearBufferPage(7);
 				if (display_config_mode_animation_timer < 8)
-					oledBufPrintText(7, 1, "...para configurar...");
+					oledPrintText(7, 1, "...para configurar...");
 				else
-					oledBufPrintText(7, 1, "Conectate a mi Wi-Fi!");
+					oledPrintText(7, 1, "Conectate a mi Wi-Fi!");
 			}
 			else if (display_config_mode_animation_timer < 25)
 				oledDrawBitmap(0, 0, oledIconPass);
 			else
 			{
-				oledBufPrintText(1, 0, "Wi-Fi: Minuette");
-				oledBufPrintText(3, 0, "Clave: minuta12345");
-				oledBufPrintText(6, 0, "Link de configuracion:");
-				oledBufPrintText(7, 0, "http://192.168.4.1");
+				oledPrintText(1, 0, "Wi-Fi: Minuette");
+				oledPrintText(3, 0, "Clave: minuta12345");
+				oledPrintText(6, 0, "Link de configuracion:");
+				oledPrintText(7, 0, "http://192.168.4.1");
 			}
 		}
 
@@ -388,17 +440,17 @@ void loop()
 		} // show_clock
 
 
-		// Display timer ran out... turn off
+		// Display activity timer ran out... turn off
 		else {
 			if(display_needs_wipe) {
-				oledClear();
+				oledRawClear();
 			}
 			display_needs_wipe = false;
 		}
 
 		if (display_off_timer > 0)
 		{
-			oledBufFlush();
+			oledPushBuffer();
 		}
 		
 	}

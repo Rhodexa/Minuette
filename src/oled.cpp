@@ -63,21 +63,21 @@ void oledInit()
 		writeCommand(initCmds[i]);
 	}
 
-	oledClear();
+	oledRawClear();
 	writeCommand(0xAF); // display on
 }
 
-void oledClearPage(uint8_t page)
+void oledRawClearPage(uint8_t page)
 {
 	static const uint8_t zeros[OLED_WIDTH_PX] = {0};
 	oledWritePage(page, 0, zeros, OLED_WIDTH_PX);
 }
 
-void oledClear()
+void oledRawClear()
 {
 	for (uint8_t page = 0; page < OLED_HEIGHT_PAGES; page++)
 	{
-		oledClearPage(page);
+		oledRawClearPage(page);
 	}
 }
 
@@ -86,7 +86,7 @@ void oledClear()
 // buffer, which is the bug this replaced.
 static uint8_t oledBuffer[OLED_WIDTH_PX * OLED_HEIGHT_PAGES];
 
-void oledBufClearPage(uint8_t page)
+void oledClearBufferPage(uint8_t page)
 {
 	if (page >= OLED_HEIGHT_PAGES)
 	{
@@ -95,7 +95,7 @@ void oledBufClearPage(uint8_t page)
 	memset(oledBuffer + (uint16_t)page * OLED_WIDTH_PX, 0x00, OLED_WIDTH_PX);
 }
 
-void oledBufClear()
+void oledClearBuffer()
 {
 	memset(oledBuffer, 0x00, sizeof(oledBuffer));
 }
@@ -113,7 +113,7 @@ void oledBufWritePage(uint8_t page, uint8_t startCol, const uint8_t *columns, ui
 	memcpy(oledBuffer + (uint16_t)page * OLED_WIDTH_PX + startCol, columns, count);
 }
 
-void oledBufFlush()
+void oledPushBuffer()
 {
 	for (uint8_t page = 0; page < OLED_HEIGHT_PAGES; page++)
 	{
@@ -169,8 +169,8 @@ void oledSetInverted(bool inverted)
 	writeCommand(inverted ? 0xA7 : 0xA6);
 }
 
-// Both oledPrintChar/oledPrintText (straight to the panel) and their
-// oledBufPrintChar/oledBufPrintText counterparts (into the buffer) do the
+// Both oledPrintChar/oledRawPrintText (straight to the panel) and their
+// oledBufPrintChar/oledPrintText counterparts (into the buffer) do the
 // exact same glyph lookup — they only differ in which page-writer they
 // hand the result to — so that's the one thing threaded through here as a
 // function pointer, matching oledWritePage()/oledBufWritePage()'s signature.
@@ -217,7 +217,7 @@ uint8_t oledPrintChar(uint8_t page, uint8_t col, char c)
 	return printCharVia(oledWritePage, page, col, c);
 }
 
-uint8_t oledPrintText(uint8_t page, uint8_t col, const char *text)
+uint8_t oledRawPrintText(uint8_t page, uint8_t col, const char *text)
 {
 	return printTextVia(oledWritePage, page, col, text);
 }
@@ -227,7 +227,7 @@ uint8_t oledBufPrintChar(uint8_t page, uint8_t col, char c)
 	return printCharVia(oledBufWritePage, page, col, c);
 }
 
-uint8_t oledBufPrintText(uint8_t page, uint8_t col, const char *text)
+uint8_t oledPrintText(uint8_t page, uint8_t col, const char *text)
 {
 	return printTextVia(oledBufWritePage, page, col, text);
 }

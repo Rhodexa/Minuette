@@ -128,11 +128,11 @@ uint8_t segment_numbers[] = {
 
 void oledDrawClock(int hour, int minute, bool has_colon)
 {
-	oledBufClearPage(1);
-	oledBufClearPage(2);
-	oledBufClearPage(3);
-	oledBufClearPage(4);
-	oledBufClearPage(5);
+	oledClearBufferPage(1);
+	oledClearBufferPage(2);
+	oledClearBufferPage(3);
+	oledClearBufferPage(4);
+	oledClearBufferPage(5);
 	segment_col = 3;
 	segment_row = 1;
 	oledDrawSegments(segment_numbers[hour / 10]);
