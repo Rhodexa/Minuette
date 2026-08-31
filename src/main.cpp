@@ -203,7 +203,7 @@ void displayShowErrors(){
 	int line = 0;
 	if(error_flag_rtc_lost_power) {
 		line++;
-		oledPrintText(line, 8, "W: RTC got Reset");
+		oledPrintText(line, 8, "W: Time might be off");
 	}
 	
 	if(error_flag_rtc_not_found) {
@@ -211,12 +211,13 @@ void displayShowErrors(){
 		oledPrintText(line, 8, "E: RTC Comms Fail");
 	}
 	
-	if(error_flag_rtc_not_found) {
+	if(error_flag_eeprom_not_found) {
 		line++;
 		oledPrintText(line, 8, "E: EEPROM Comms Fail");
 	}
-	if(line) delay(10000);
 	oledPushBuffer();
+	
+	if(line) delay(10000);
 }
 
 void displayShowSplashScreen()
@@ -286,7 +287,8 @@ void setup()
 		Serial.println("[eeprom] ok");
 	}
 
-	displayShowErrors(); // show errors, if any...
+	// Errors are ambiguous... hide them
+	//displayShowErrors(); // show errors, if any...
 	displayShowSplashScreen();
 }
 
@@ -368,8 +370,6 @@ void loop()
 
 	// Display painting routine:
 
-	bool display_needs_wipe = true;
-
 	display_config_show = in_config_mode;
 
 	if (now - display_last_update >= 1000)
@@ -381,8 +381,9 @@ void loop()
 	if (display_paint_requested)
 	{
 		display_paint_requested = false;
-		oledClearBuffer();
-
+		if(display_off_timer > 0) {
+			oledClearBuffer();
+		}
 
 		// Priotity Tree
 
@@ -432,26 +433,23 @@ void loop()
 
 
 		// Show clock by default
-		else if (display_off_timer > 0)
+		else if (display_off_timer > 1)
 		{
 			display_clock_show_data = rtcNow();
 			oledDrawClock(display_clock_show_data.hour, display_clock_show_data.minute, now & 0x400);
-			display_off_timer--;
 		} // show_clock
-
-
+		
+		
 		// Display activity timer ran out... turn off
-		else {
-			if(display_needs_wipe) {
-				oledRawClear();
-			}
-			display_needs_wipe = false;
-		}
-
-		if (display_off_timer > 0)
-		{
+		else if (display_off_timer == 1){
+			oledClearBuffer();
 			oledPushBuffer();
 		}
 		
+		if (display_off_timer > 0)
+		{
+			display_off_timer--;
+			oledPushBuffer();
+		}		
 	}
 }

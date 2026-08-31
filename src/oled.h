@@ -5,6 +5,7 @@
 static const uint8_t OLED_WIDTH_PX = 128;
 static const uint8_t OLED_HEIGHT_PAGES = 8; // 8 pages * 8px = 64px tall
 
+
 // Minimal driver for a 128x64 SH1106-based I2C OLED.
 
 // The write primitive mirrors the controller's own memory layout instead of

@@ -12,6 +12,9 @@
 // comes out shifted sideways, this is the first thing to try changing.
 static const uint8_t OLED_COL_OFFSET = 2;
 
+
+static uint8_t oledBuffer[OLED_WIDTH_PX * OLED_HEIGHT_PAGES];
+
 // Data writes are split into chunks this size so a full 128-byte page
 // write never risks overrunning Wire's internal transmit buffer.
 static const uint8_t I2C_CHUNK = 32;
@@ -80,11 +83,6 @@ void oledRawClear()
 		oledRawClearPage(page);
 	}
 }
-
-// Private to this file — a header-scope `static` array would give every
-// .cpp that includes oled.h its own separate copy instead of one shared
-// buffer, which is the bug this replaced.
-static uint8_t oledBuffer[OLED_WIDTH_PX * OLED_HEIGHT_PAGES];
 
 void oledClearBufferPage(uint8_t page)
 {
