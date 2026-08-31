@@ -354,6 +354,7 @@ void loop()
 
 	// Bell timer
 	if(now - last_ringer_timer_tick >= 100) {
+		last_ringer_timer_tick = now;
 		if (ringer_timer > 0)
 		{
 			ringer_timer--;
