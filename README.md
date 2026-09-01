@@ -1,10 +1,12 @@
 ![screenshot](minuta_gh_banner.png)
 ---
 # Minuta / Minuette
-SSID: Minuette \
-Password: minuta1234
----
 Un simple controlador de timbres!
+---
+
+SSID: Minuette \
+Password: minuta1234 \
+
 ---
 
 ## ¿Ayuda?
